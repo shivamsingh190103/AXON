@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel
 
-from models import gpu_status, load_models, models_ready
+from models import current_profile, gpu_status, load_models, models_ready
 from pipeline.extractor import run_extract
 from pipeline.scorer import run_score
 from pipeline.tribe import run_infer
@@ -60,6 +60,8 @@ def health() -> dict:
     gpu_available, gpu_memory_free_gb = gpu_status()
     return {
         'status': 'ok',
+        'profile': current_profile(),
+        'degraded_mode': not (models.vjepa2 and models.wav2vec and models.llama and models.tribe),
         'models_loaded': {
             'vjepa2': models.vjepa2,
             'wav2vec': models.wav2vec,

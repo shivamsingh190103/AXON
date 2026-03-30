@@ -11,6 +11,7 @@ class LoadedModels:
     wav2vec: bool
     llama: bool
     tribe: bool
+    whisper: bool
 
 
 @dataclass
@@ -40,7 +41,15 @@ _runtime_models = RuntimeModels(
     whisper_backend=None,
 )
 
-_loaded_flags = LoadedModels(vjepa2=False, wav2vec=False, llama=False, tribe=False)
+_loaded_flags = LoadedModels(vjepa2=False, wav2vec=False, llama=False, tribe=False, whisper=False)
+_current_profile = 'lite'
+_require_full_models = False
+
+
+def _is_true(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
 def _resolve_device(torch_module: Any | None) -> str:
@@ -66,7 +75,17 @@ def _load_transformer_model(model_id: str, torch_dtype: Any | None, hf_token: st
 
 
 def load_models() -> LoadedModels:
-    global _loaded_flags
+    global _loaded_flags, _current_profile, _require_full_models
+
+    profile = os.getenv('ML_PROFILE', 'lite').strip().lower()
+    _current_profile = profile
+    _require_full_models = _is_true(os.getenv('ML_REQUIRE_FULL_MODELS'), default=profile == 'full')
+
+    enable_vjepa = _is_true(os.getenv('ML_ENABLE_VJEPA2'), default=profile == 'full')
+    enable_wav2vec = _is_true(os.getenv('ML_ENABLE_WAV2VEC'), default=profile in {'full', 'balanced'})
+    enable_llama = _is_true(os.getenv('ML_ENABLE_LLAMA'), default=profile == 'full')
+    enable_tribe = _is_true(os.getenv('ML_ENABLE_TRIBE'), default=profile == 'full')
+    enable_whisper = _is_true(os.getenv('ML_ENABLE_WHISPER'), default=True)
 
     hf_token = os.getenv('HF_TOKEN') or None
     tribe_model_id = os.getenv('TRIBE_MODEL_ID', 'facebook/tribev2')
@@ -75,12 +94,17 @@ def load_models() -> LoadedModels:
     llama_model_id = os.getenv('LLAMA_MODEL_ID', 'meta-llama/Llama-3.2-3B-Instruct')
     whisper_model_size = os.getenv('WHISPER_MODEL_SIZE', 'small')
 
-    try:
-        import torch  # type: ignore
+    should_load_torch = enable_vjepa or enable_wav2vec or enable_llama or enable_tribe
+    if should_load_torch:
+        try:
+            import torch  # type: ignore
 
-        _runtime_models.torch = torch
-        _runtime_models.device = _resolve_device(torch)
-    except Exception:
+            _runtime_models.torch = torch
+            _runtime_models.device = _resolve_device(torch)
+        except Exception:
+            _runtime_models.torch = None
+            _runtime_models.device = 'cpu'
+    else:
         _runtime_models.torch = None
         _runtime_models.device = 'cpu'
 
@@ -88,81 +112,105 @@ def load_models() -> LoadedModels:
     if _runtime_models.torch is not None and _runtime_models.device in {'cuda', 'mps'}:
         torch_dtype = _runtime_models.torch.float16
 
-    try:
-        _runtime_models.vjepa2_model = _load_transformer_model(vjepa_model_id, torch_dtype, hf_token)
-        if _runtime_models.torch is not None:
-            _runtime_models.vjepa2_model.to(_runtime_models.device)
-        _runtime_models.vjepa2_model.eval()
-        _loaded_flags.vjepa2 = True
-    except Exception:
+    if enable_vjepa:
+        try:
+            _runtime_models.vjepa2_model = _load_transformer_model(vjepa_model_id, torch_dtype, hf_token)
+            if _runtime_models.torch is not None:
+                _runtime_models.vjepa2_model.to(_runtime_models.device)
+            _runtime_models.vjepa2_model.eval()
+            _loaded_flags.vjepa2 = True
+        except Exception:
+            _runtime_models.vjepa2_model = None
+            _loaded_flags.vjepa2 = False
+    else:
         _runtime_models.vjepa2_model = None
         _loaded_flags.vjepa2 = False
 
-    try:
-        from transformers import AutoModel, AutoProcessor  # type: ignore
+    if enable_wav2vec:
+        try:
+            from transformers import AutoModel, AutoProcessor  # type: ignore
 
-        processor_kwargs: dict[str, Any] = {'trust_remote_code': True}
-        model_kwargs: dict[str, Any] = {'trust_remote_code': True}
-        if hf_token:
-            processor_kwargs['token'] = hf_token
-            model_kwargs['token'] = hf_token
-        if torch_dtype is not None:
-            model_kwargs['torch_dtype'] = torch_dtype
+            processor_kwargs: dict[str, Any] = {'trust_remote_code': True}
+            model_kwargs: dict[str, Any] = {'trust_remote_code': True}
+            if hf_token:
+                processor_kwargs['token'] = hf_token
+                model_kwargs['token'] = hf_token
+            if torch_dtype is not None:
+                model_kwargs['torch_dtype'] = torch_dtype
 
-        _runtime_models.wav2vec_processor = AutoProcessor.from_pretrained(wav2vec_model_id, **processor_kwargs)
-        _runtime_models.wav2vec_model = AutoModel.from_pretrained(wav2vec_model_id, **model_kwargs)
-        if _runtime_models.torch is not None:
-            _runtime_models.wav2vec_model.to(_runtime_models.device)
-        _runtime_models.wav2vec_model.eval()
-        _loaded_flags.wav2vec = True
-    except Exception:
+            _runtime_models.wav2vec_processor = AutoProcessor.from_pretrained(wav2vec_model_id, **processor_kwargs)
+            _runtime_models.wav2vec_model = AutoModel.from_pretrained(wav2vec_model_id, **model_kwargs)
+            if _runtime_models.torch is not None:
+                _runtime_models.wav2vec_model.to(_runtime_models.device)
+            _runtime_models.wav2vec_model.eval()
+            _loaded_flags.wav2vec = True
+        except Exception:
+            _runtime_models.wav2vec_model = None
+            _runtime_models.wav2vec_processor = None
+            _loaded_flags.wav2vec = False
+    else:
         _runtime_models.wav2vec_model = None
         _runtime_models.wav2vec_processor = None
         _loaded_flags.wav2vec = False
 
-    try:
-        from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+    if enable_llama:
+        try:
+            from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
 
-        tokenizer_kwargs: dict[str, Any] = {'trust_remote_code': True}
-        model_kwargs: dict[str, Any] = {'trust_remote_code': True}
-        if hf_token:
-            tokenizer_kwargs['token'] = hf_token
-            model_kwargs['token'] = hf_token
-        if torch_dtype is not None:
-            model_kwargs['torch_dtype'] = torch_dtype
+            tokenizer_kwargs: dict[str, Any] = {'trust_remote_code': True}
+            model_kwargs: dict[str, Any] = {'trust_remote_code': True}
+            if hf_token:
+                tokenizer_kwargs['token'] = hf_token
+                model_kwargs['token'] = hf_token
+            if torch_dtype is not None:
+                model_kwargs['torch_dtype'] = torch_dtype
 
-        _runtime_models.llama_tokenizer = AutoTokenizer.from_pretrained(llama_model_id, **tokenizer_kwargs)
-        _runtime_models.llama_model = AutoModelForCausalLM.from_pretrained(llama_model_id, **model_kwargs)
-        if _runtime_models.torch is not None:
-            _runtime_models.llama_model.to(_runtime_models.device)
-        _runtime_models.llama_model.eval()
-        _loaded_flags.llama = True
-    except Exception:
+            _runtime_models.llama_tokenizer = AutoTokenizer.from_pretrained(llama_model_id, **tokenizer_kwargs)
+            _runtime_models.llama_model = AutoModelForCausalLM.from_pretrained(llama_model_id, **model_kwargs)
+            if _runtime_models.torch is not None:
+                _runtime_models.llama_model.to(_runtime_models.device)
+            _runtime_models.llama_model.eval()
+            _loaded_flags.llama = True
+        except Exception:
+            _runtime_models.llama_model = None
+            _runtime_models.llama_tokenizer = None
+            _loaded_flags.llama = False
+    else:
         _runtime_models.llama_model = None
         _runtime_models.llama_tokenizer = None
         _loaded_flags.llama = False
 
-    try:
-        _runtime_models.tribe_model = _load_transformer_model(tribe_model_id, torch_dtype, hf_token)
-        if _runtime_models.torch is not None:
-            _runtime_models.tribe_model.to(_runtime_models.device)
-        _runtime_models.tribe_model.eval()
-        _loaded_flags.tribe = True
-    except Exception:
+    if enable_tribe:
+        try:
+            _runtime_models.tribe_model = _load_transformer_model(tribe_model_id, torch_dtype, hf_token)
+            if _runtime_models.torch is not None:
+                _runtime_models.tribe_model.to(_runtime_models.device)
+            _runtime_models.tribe_model.eval()
+            _loaded_flags.tribe = True
+        except Exception:
+            _runtime_models.tribe_model = None
+            _loaded_flags.tribe = False
+    else:
         _runtime_models.tribe_model = None
         _loaded_flags.tribe = False
 
-    # Whisper is required for extraction but is not part of the /health contract payload.
-    try:
-        from faster_whisper import WhisperModel  # type: ignore
+    if enable_whisper:
+        try:
+            from faster_whisper import WhisperModel  # type: ignore
 
-        whisper_device = 'cuda' if _runtime_models.device == 'cuda' else 'cpu'
-        compute_type = 'float16' if whisper_device == 'cuda' else 'int8'
-        _runtime_models.whisper_model = WhisperModel(whisper_model_size, device=whisper_device, compute_type=compute_type)
-        _runtime_models.whisper_backend = 'faster-whisper'
-    except Exception:
+            whisper_device = 'cuda' if _runtime_models.device == 'cuda' else 'cpu'
+            compute_type = 'float16' if whisper_device == 'cuda' else 'int8'
+            _runtime_models.whisper_model = WhisperModel(whisper_model_size, device=whisper_device, compute_type=compute_type)
+            _runtime_models.whisper_backend = 'faster-whisper'
+            _loaded_flags.whisper = True
+        except Exception:
+            _runtime_models.whisper_model = None
+            _runtime_models.whisper_backend = None
+            _loaded_flags.whisper = False
+    else:
         _runtime_models.whisper_model = None
         _runtime_models.whisper_backend = None
+        _loaded_flags.whisper = False
 
     return _loaded_flags
 
@@ -172,7 +220,13 @@ def get_runtime_models() -> RuntimeModels:
 
 
 def models_ready() -> bool:
-    return _loaded_flags.vjepa2 and _loaded_flags.wav2vec and _loaded_flags.llama and _loaded_flags.tribe
+    if _require_full_models:
+        return _loaded_flags.vjepa2 and _loaded_flags.wav2vec and _loaded_flags.llama and _loaded_flags.tribe and _loaded_flags.whisper
+    return _loaded_flags.whisper
+
+
+def current_profile() -> str:
+    return _current_profile
 
 
 def gpu_status() -> tuple[bool, float | None]:
