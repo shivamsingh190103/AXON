@@ -107,7 +107,178 @@ async function updateStatus(analysisId: string, status: AnalysisStatus, progress
   })
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const MOCK_TIMESERIES_MIN_LENGTH = 30
+const MOCK_TIMESERIES_MAX_LENGTH = 120
+
+// Score base values and variance for plausible mock distributions
+const MOCK_OVERALL_BASE = 55
+const MOCK_OVERALL_VARIANCE = 30
+const MOCK_HOOK_BASE = 60
+const MOCK_HOOK_VARIANCE = 25
+const MOCK_BOREDOM_BASE = 25
+const MOCK_BOREDOM_VARIANCE = 30
+const MOCK_EMOTION_BASE = 55
+const MOCK_EMOTION_VARIANCE = 30
+
+function generateMockTimeseries(length: number, base: number, variance: number): number[] {
+  const result: number[] = []
+  let current = base
+  for (let i = 0; i < length; i++) {
+    // Random walk centred at zero so the series drifts naturally
+    current = Math.max(0, Math.min(100, current + (Math.random() - 0.5) * variance * 2))
+    result.push(Math.round(current))
+  }
+  return result
+}
+
+async function mockProcessJob(job: Job<AnalysisJob>) {
+  const { analysisId, userId } = job.data
+
+  const analysis = await prisma.analysis.findUnique({ where: { id: analysisId }, include: { user: true } })
+  if (!analysis) throw new Error('Analysis not found')
+
+  logger.info({ analysisId }, '[MOCK] Starting mock ML processing')
+
+  await updateStatus(analysisId, AnalysisStatus.EXTRACTING_FEATURES, 10, 'Extracting audio and video features...', 8)
+  await delay(1500)
+
+  await emitProgress(analysisId, { status: AnalysisStatus.EXTRACTING_FEATURES, progress: 55, currentStep: 'Feature extraction complete' })
+  await delay(1000)
+
+  await updateStatus(analysisId, AnalysisStatus.RUNNING_TRIBE, 55, 'Running TRIBE v2 neural inference...', 5)
+  await delay(2000)
+
+  await emitProgress(analysisId, { status: AnalysisStatus.RUNNING_TRIBE, progress: 80, currentStep: 'TRIBE inference complete' })
+  await delay(500)
+
+  await updateStatus(analysisId, AnalysisStatus.SCORING, 80, 'Computing engagement scores...', 2)
+  await delay(1000)
+
+  await emitProgress(analysisId, { status: AnalysisStatus.SCORING, progress: 90, currentStep: 'Scoring complete' })
+
+  await updateStatus(analysisId, AnalysisStatus.GENERATING_INSIGHTS, 90, 'Generating creator insights...', 1)
+  await delay(800)
+
+  const mockDuration = analysis.durationSeconds ?? 120
+  const timeseriesLength = Math.max(MOCK_TIMESERIES_MIN_LENGTH, Math.min(MOCK_TIMESERIES_MAX_LENGTH, Math.round(mockDuration)))
+
+  const hookTimeseries = generateMockTimeseries(timeseriesLength, MOCK_HOOK_BASE, 12)
+  const boredomTimeseries = generateMockTimeseries(timeseriesLength, MOCK_BOREDOM_BASE, 18)
+  const emotionTimeseries = generateMockTimeseries(timeseriesLength, MOCK_EMOTION_BASE, 15)
+
+  const overallScore = Math.round(MOCK_OVERALL_BASE + Math.random() * MOCK_OVERALL_VARIANCE)
+  const hookScore = Math.round(MOCK_HOOK_BASE + Math.random() * MOCK_HOOK_VARIANCE)
+  const boredomScore = Math.round(MOCK_BOREDOM_BASE + Math.random() * MOCK_BOREDOM_VARIANCE)
+  const emotionScore = Math.round(MOCK_EMOTION_BASE + Math.random() * MOCK_EMOTION_VARIANCE)
+
+  const gradeData = gradeFromScore(overallScore)
+  const formatType = resolveFormatType(mockDuration)
+
+  const mockInsights = [
+    {
+      type: 'HOOK_MOMENT',
+      severity: 'HIGH',
+      timestampSeconds: Math.round(5 + Math.random() * 10),
+      title: 'Strong hook detected',
+      description: 'Viewer engagement peaks in the first 15 seconds — your opening lands well.',
+      suggestion: 'Replicate this energy in future intros.'
+    },
+    {
+      type: 'BOREDOM_SPIKE',
+      severity: 'MEDIUM',
+      timestampSeconds: Math.round(30 + Math.random() * 30),
+      title: 'Boredom spike',
+      description: 'Attention drift detected mid-video — viewers may scroll away at this point.',
+      suggestion: 'Add a pattern interrupt: cut to B-roll, add a kinetic text overlay, or ask a direct question.'
+    },
+    {
+      type: 'EMOTION_PEAK',
+      severity: 'HIGH',
+      timestampSeconds: Math.round(70 + Math.random() * 30),
+      title: 'Emotional peak',
+      description: 'Strong emotional response detected — this moment resonates deeply with viewers.',
+      suggestion: 'Use this style of storytelling more often to maximise retention.'
+    }
+  ]
+
+  const resultPayload: Prisma.AnalysisResultUncheckedCreateInput = {
+    analysisId,
+    overallScore,
+    hookScore,
+    boredomScore,
+    emotionScore,
+    hookTimeseries: hookTimeseries as unknown as Prisma.InputJsonValue,
+    boredomTimeseries: boredomTimeseries as unknown as Prisma.InputJsonValue,
+    emotionTimeseries: emotionTimeseries as unknown as Prisma.InputJsonValue,
+    rawOutputS3Key: null,
+    insights: mockInsights as unknown as Prisma.InputJsonValue,
+    formatType,
+    grade: gradeData.grade,
+    gradeSummary: gradeData.summary
+  }
+
+  const result = await prisma.analysisResult.upsert({
+    where: { analysisId },
+    create: resultPayload,
+    update: {
+      overallScore: resultPayload.overallScore,
+      hookScore: resultPayload.hookScore,
+      boredomScore: resultPayload.boredomScore,
+      emotionScore: resultPayload.emotionScore,
+      hookTimeseries: resultPayload.hookTimeseries,
+      boredomTimeseries: resultPayload.boredomTimeseries,
+      emotionTimeseries: resultPayload.emotionTimeseries,
+      rawOutputS3Key: null,
+      insights: resultPayload.insights,
+      formatType,
+      grade: resultPayload.grade,
+      gradeSummary: resultPayload.gradeSummary
+    }
+  })
+
+  await prisma.analysis.update({
+    where: { id: analysisId },
+    data: {
+      status: AnalysisStatus.COMPLETED,
+      processingCompletedAt: new Date(),
+      durationSeconds: analysis.durationSeconds ?? mockDuration,
+      errorCode: null,
+      errorMessage: null
+    }
+  })
+
+  await emitProgress(analysisId, { status: AnalysisStatus.COMPLETED, progress: 100, currentStep: 'Completed' })
+
+  try {
+    const io = getIo()
+    io.to(roomName(analysisId)).emit('analysis:completed', {
+      analysisId,
+      result: {
+        overallScore: result.overallScore,
+        hookScore: result.hookScore,
+        boredomScore: result.boredomScore,
+        emotionScore: result.emotionScore,
+        grade: result.grade,
+        gradeSummary: result.gradeSummary
+      }
+    })
+  } catch {
+    // no-op
+  }
+
+  await redis.del(`analysis:${userId}:${analysisId}`)
+  logger.info({ analysisId }, '[MOCK] Mock ML processing complete')
+}
+
 async function processJob(job: Job<AnalysisJob>) {
+  if (env.USE_MOCK_ML) {
+    return mockProcessJob(job)
+  }
+
   const { analysisId, userId, sourceType } = job.data
 
   const analysis = await prisma.analysis.findUnique({ where: { id: analysisId }, include: { user: true } })

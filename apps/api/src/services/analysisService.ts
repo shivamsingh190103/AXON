@@ -62,7 +62,7 @@ async function enforcePlanLimit(userId: string, plan: Plan) {
 
   const limit = planLimits[plan].analysesPerMonth
   if (analysesThisMonth >= limit) {
-    throw new ApiError(StatusCodes.FORBIDDEN, 'PLAN_LIMIT_REACHED', 'You have reached your monthly analysis limit for your plan.')
+    throw new ApiError(StatusCodes.PAYMENT_REQUIRED, 'PLAN_LIMIT_REACHED', 'You have reached your monthly analysis limit. Upgrade to Pro to continue.')
   }
 }
 

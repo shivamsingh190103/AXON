@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { CheckCircle2, CloudUpload, Info, Link2, XCircle } from 'lucide-react'
+import { CheckCircle2, CloudUpload, Info, Link2, Lock, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
+import { isAxiosError } from 'axios'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -16,10 +17,18 @@ interface Props {
 
 const youtubePattern = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/
 
+const MAX_FILE_BYTES = 100 * 1024 * 1024 // 100 MB
+const ALLOWED_MIME_TYPES = {
+  'video/mp4': ['.mp4'],
+  'video/quicktime': ['.mov'],
+  'video/webm': ['.webm']
+} as const
+
 export function UploadModal({ open, onClose }: Props) {
   const [tab, setTab] = useState<'file' | 'youtube'>('file')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [youtubeUrl, setYoutubeUrl] = useState('')
+  const [showPaywall, setShowPaywall] = useState(false)
   const navigate = useNavigate()
 
   const fileUpload = useUploadFile()
@@ -27,20 +36,29 @@ export function UploadModal({ open, onClose }: Props) {
 
   const youtubeValid = useMemo(() => youtubePattern.test(youtubeUrl.trim()), [youtubeUrl])
 
+  const handlePaywallClose = () => {
+    setShowPaywall(false)
+    onClose()
+  }
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'video/mp4': ['.mp4'],
-      'video/quicktime': ['.mov'],
-      'video/x-matroska': ['.mkv'],
-      'video/avi': ['.avi'],
-      'video/webm': ['.webm']
-    },
-    maxSize: 500 * 1024 * 1024,
+    accept: ALLOWED_MIME_TYPES,
+    maxSize: MAX_FILE_BYTES,
     onDropAccepted(files) {
       setSelectedFile(files[0] ?? null)
     },
-    onDropRejected() {
-      toast.error('This file format is not supported or exceeds 500MB.')
+    onDropRejected(rejections) {
+      const rejection = rejections[0]
+      if (!rejection) return
+      const isTooLarge = rejection.errors.some((e) => e.code === 'file-too-large')
+      const isWrongType = rejection.errors.some((e) => e.code === 'file-invalid-type')
+      if (isTooLarge) {
+        toast.error(`File exceeds the 100 MB limit (${(rejection.file.size / (1024 * 1024)).toFixed(0)} MB). Please compress or trim your video.`)
+      } else if (isWrongType) {
+        toast.error(`"${rejection.file.name}" is not supported. Please upload an MP4, MOV, or WebM file.`)
+      } else {
+        toast.error('This file could not be uploaded. Please try a different file.')
+      }
     }
   })
 
@@ -56,8 +74,12 @@ export function UploadModal({ open, onClose }: Props) {
         onClose()
         navigate(`/analysis/${analysisId}`)
       }
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setShowPaywall(true)
+      } else {
+        toast.error('Something went wrong. Please try again.')
+      }
     }
   }
 
@@ -76,9 +98,52 @@ export function UploadModal({ open, onClose }: Props) {
         onClose()
         navigate(`/analysis/${analysisId}`)
       }
-    } catch {
-      toast.error('Something went wrong. Please try again.')
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setShowPaywall(true)
+      } else {
+        toast.error('Something went wrong. Please try again.')
+      }
     }
+  }
+
+  if (showPaywall) {
+    return (
+      <Modal open={open} onClose={handlePaywallClose} title="Upgrade to Pro">
+        <div className="flex flex-col items-center py-6 text-center">
+          <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-[var(--primary)]/20 text-violet-300">
+            <Lock size={28} />
+          </div>
+          <h3 className="display text-xl font-bold">You've hit your free limit</h3>
+          <p className="mt-2 max-w-xs text-sm text-slate-400">
+            Free accounts can analyse <span className="font-semibold text-white">3 videos per month</span>. Upgrade to Pro for unlimited analyses, longer videos, and priority GPU processing.
+          </p>
+          <div className="mt-6 w-full space-y-3 rounded-2xl border border-[rgba(124,109,250,0.25)] bg-[rgba(124,109,250,0.08)] p-4 text-left text-sm">
+            <div className="flex items-center gap-2 text-violet-200">
+              <CheckCircle2 size={16} className="shrink-0 text-violet-400" />
+              Unlimited video analyses
+            </div>
+            <div className="flex items-center gap-2 text-violet-200">
+              <CheckCircle2 size={16} className="shrink-0 text-violet-400" />
+              Videos up to 2 hours long
+            </div>
+            <div className="flex items-center gap-2 text-violet-200">
+              <CheckCircle2 size={16} className="shrink-0 text-violet-400" />
+              Priority GPU queue
+            </div>
+          </div>
+          <Button fullWidth className="mt-6" onClick={() => navigate('/billing')}>
+            Upgrade to Pro
+          </Button>
+          <button
+            className="mt-3 text-sm text-slate-500 underline-offset-2 hover:underline"
+            onClick={handlePaywallClose}
+          >
+            Maybe later
+          </button>
+        </div>
+      </Modal>
+    )
   }
 
   return (
@@ -103,7 +168,7 @@ export function UploadModal({ open, onClose }: Props) {
             <input {...getInputProps()} />
             <CloudUpload className="mx-auto mb-3 text-slate-400" />
             <p className="font-semibold">Drop your video here</p>
-            <p className="mono mt-1 text-xs text-slate-500">or click to browse · MP4, MOV, MKV, AVI, WebM · Max 500MB</p>
+            <p className="mono mt-1 text-xs text-slate-500">or click to browse · MP4, MOV, WebM · Max 100 MB</p>
           </div>
 
           {selectedFile ? (
