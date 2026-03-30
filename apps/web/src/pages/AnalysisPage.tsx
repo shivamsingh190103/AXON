@@ -31,6 +31,7 @@ export function AnalysisPage() {
   const [currentSecond, setCurrentSecond] = useState(0)
   const [duration, setDuration] = useState(0)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [socketFailed, setSocketFailed] = useState<{ errorMessage: string } | null>(null)
 
   useEffect(() => {
     if (!id || !accessToken) return
@@ -48,7 +49,7 @@ export function AnalysisPage() {
 
     const onFailed = (event: { analysisId: string; errorMessage: string }) => {
       if (event.analysisId === id) {
-        toast.error(event.errorMessage || 'Analysis failed. Please retry.')
+        setSocketFailed({ errorMessage: event.errorMessage || 'Analysis failed. Please retry.' })
         queryClient.invalidateQueries({ queryKey: ['analysis', id] })
       }
     }
@@ -158,9 +159,18 @@ export function AnalysisPage() {
         <Sidebar />
         <main className="grid w-full gap-4 p-4 pb-24 lg:grid-cols-[1fr_320px] lg:p-6 lg:pb-6">
           <section>
-            {isProcessing ? (
+            {isProcessing || socketFailed ? (
               <div className="grid min-h-[520px] place-items-center rounded-2xl border border-white/10 bg-[#0b0b16] p-4">
-                <ProcessingModal step={currentStep} progress={progress} />
+                <ProcessingModal
+                  step={currentStep}
+                  progress={progress}
+                  failed={!!socketFailed}
+                  errorMessage={socketFailed?.errorMessage}
+                  onRetry={async () => {
+                    setSocketFailed(null)
+                    await refetch()
+                  }}
+                />
               </div>
             ) : detail?.status === 'FAILED' ? (
               <div className="grid min-h-[520px] place-items-center rounded-2xl border border-rose-400/30 bg-rose-500/10 p-8 text-center">

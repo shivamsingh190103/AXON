@@ -31,7 +31,11 @@ const envSchema = z.object({
   ML_SERVICE_URL: z.string().default('http://localhost:8000'),
   ML_SERVICE_SECRET: z.string().default('internal_secret_for_service_auth'),
   COOKIE_DOMAIN: z.string().optional(),
-  CSRF_SECRET: z.string().min(16).default('change-this-csrf-secret')
+  CSRF_SECRET: z.string().min(16).default('change-this-csrf-secret'),
+  USE_MOCK_ML: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true')
 })
 
 const parsed = envSchema.safeParse(process.env)

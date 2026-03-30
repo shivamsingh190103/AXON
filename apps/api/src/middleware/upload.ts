@@ -5,22 +5,22 @@ import { ApiError } from '../utils/ApiError.js'
 const allowedMimes = new Set([
   'video/mp4',
   'video/quicktime',
-  'video/x-matroska',
-  'video/avi',
   'video/webm'
 ])
 
-const allowedExtensions = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm'])
+const allowedExtensions = new Set(['.mp4', '.mov', '.webm'])
+
+export const MAX_UPLOAD_BYTES = 100 * 1024 * 1024 // 100 MB
 
 export const uploadVideoMiddleware = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 4 * 1024 * 1024 * 1024 // cap by max plan, exact plan check happens later
+    fileSize: MAX_UPLOAD_BYTES
   },
   fileFilter(_req, file, cb) {
     const ext = path.extname(file.originalname).toLowerCase()
     if (!allowedMimes.has(file.mimetype) || !allowedExtensions.has(ext)) {
-      cb(new ApiError(422, 'INVALID_VIDEO_TYPE', 'Only MP4, MOV, MKV, AVI, and WebM files are supported.'))
+      cb(new ApiError(422, 'INVALID_VIDEO_TYPE', 'Only MP4, MOV, and WebM files are supported.'))
       return
     }
 

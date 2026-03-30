@@ -16,7 +16,5 @@ export const planLimits: Record<Plan, { analysesPerMonth: number; maxDurationSec
 export const uploadMimeTypes = [
   'video/mp4',
   'video/quicktime',
-  'video/x-matroska',
-  'video/avi',
   'video/webm'
 ]
