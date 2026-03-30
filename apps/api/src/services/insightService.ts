@@ -14,25 +14,72 @@ function getAnalysisFormat(durationSeconds: number): AnalysisFormat {
   return 'STANDARD'
 }
 
-function generateBoredomDescription(second: number, total: number, severity: InsightSeverity, format: AnalysisFormat) {
+// ---------------------------------------------------------------------------
+// Adaptive statistics helpers
+// ---------------------------------------------------------------------------
+
+/** Arithmetic mean of an array. */
+function mean(arr: number[]): number {
+  if (!arr.length) return 0
+  return arr.reduce((a, b) => a + b, 0) / arr.length
+}
+
+/** Population standard deviation. */
+function stdDev(arr: number[], mu: number): number {
+  if (arr.length < 2) return 0
+  const variance = arr.reduce((acc, v) => acc + (v - mu) ** 2, 0) / arr.length
+  return Math.sqrt(variance)
+}
+
+/**
+ * Compute the z-score of a single value relative to a baseline distribution.
+ * Returns 0 when the series has near-zero variance to avoid division-by-zero.
+ */
+function zScore(value: number, mu: number, sigma: number): number {
+  if (sigma < 1e-6) return 0
+  return (value - mu) / sigma
+}
+
+/**
+ * Estimate the instantaneous trend (first derivative) using a symmetric
+ * finite-difference window of ±radius seconds.  Returns positive when the
+ * signal is rising, negative when falling.
+ */
+function trendAt(ts: number[], i: number, radius = 3): number {
+  const lo = Math.max(0, i - radius)
+  const hi = Math.min(ts.length - 1, i + radius)
+  if (hi === lo) return 0
+  return (ts[hi] - ts[lo]) / (hi - lo)
+}
+
+/**
+ * Rolling mean over a window of `window` samples ending at index `i`.
+ */
+function rollingMean(ts: number[], i: number, window: number): number {
+  const lo = Math.max(0, i - window + 1)
+  return mean(ts.slice(lo, i + 1))
+}
+
+function generateBoredomDescription(second: number, total: number, severity: InsightSeverity, format: AnalysisFormat, zs: number) {
   const position = second / total
+  const zLabel = zs >= 3 ? 'extreme' : zs >= 2 ? 'strong' : 'elevated'
   if (format === 'SHORT_FORM') {
-    return `Short-form hook risk around ${formatTime(second)}. This moment likely loses swipe-speed viewers.`
+    return `Short-form hook risk around ${formatTime(second)}. ${zLabel.charAt(0).toUpperCase() + zLabel.slice(1)} DMN activation (z=${zs.toFixed(1)}) signals swipe-speed viewer drop-off.`
   }
 
   if (format === 'LONG_FORM' && position > 0.5) {
-    return `Viewer fatigue is rising at ${formatTime(second)}. Narrative momentum is flattening in the long-form arc.`
+    return `Viewer fatigue rising at ${formatTime(second)} (z=${zs.toFixed(1)}). Narrative momentum is flattening in the long-form arc.`
   }
 
   if (severity === InsightSeverity.CRITICAL && position < 0.2) {
-    return `Critical early drop at ${formatTime(second)}. Viewers are disengaging in the hook window.`
+    return `Critical early drop at ${formatTime(second)} (z=${zs.toFixed(1)}). Default-mode activation is unusually high during your hook window.`
   }
 
   if (position > 0.8) {
-    return `Boredom spike near the ending at ${formatTime(second)}. Strong finish momentum is dropping.`
+    return `Boredom spike near the ending at ${formatTime(second)} (z=${zs.toFixed(1)}). Strong finish momentum is dropping.`
   }
 
-  return `High default-mode activation at ${formatTime(second)} indicates attention drift.`
+  return `Default-mode activation ${zLabel} at ${formatTime(second)} (z=${zs.toFixed(1)}) indicates attention drift.`
 }
 
 function generateBoredomSuggestion(second: number, total: number, format: AnalysisFormat): string {
@@ -49,6 +96,18 @@ function generateBoredomSuggestion(second: number, total: number, format: Analys
   if (position < 0.4) return 'This is your critical retention zone. Add a pattern interrupt: cut to a reaction shot, zoom in dramatically, or add a graphic overlay.'
   if (position > 0.8) return 'Viewers who made it this far are invested. Add a strong call-to-action or tease the next video to keep them engaged.'
   return 'Add B-roll footage, increase pace with a cut, or add text overlays to re-stimulate visual attention.'
+}
+
+/**
+ * Map a z-score to an InsightSeverity level.
+ * Using z-score thresholds means severity is relative to the video's own
+ * signal distribution rather than fixed absolute values.
+ */
+function getSeverityFromZ(zs: number): InsightSeverity {
+  if (zs >= 3.0) return InsightSeverity.CRITICAL
+  if (zs >= 2.0) return InsightSeverity.HIGH
+  if (zs >= 1.5) return InsightSeverity.MEDIUM
+  return InsightSeverity.LOW
 }
 
 function getSeverity(type: InsightType, value: number): InsightSeverity {
@@ -70,24 +129,49 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
   const insights: Insight[] = []
   const format = getAnalysisFormat(durationSeconds)
 
+  // Pre-compute global distribution statistics for each signal so that all
+  // thresholds are adaptive (relative to this video's own baseline) rather
+  // than fixed absolute numbers.
+  const boredomMu = mean(boredomTs)
+  const boredomSigma = stdDev(boredomTs, boredomMu)
+  const emotionMu = mean(emotionTs)
+  const emotionSigma = stdDev(emotionTs, emotionMu)
+  const hookMu = mean(hookTs)
+  const hookSigma = stdDev(hookTs, hookMu)
+
+  // -----------------------------------------------------------------------
+  // 1. BOREDOM SPIKE DETECTION
+  //    Trigger when the boredom z-score exceeds 1.5 AND the 3-second rolling
+  //    mean is also elevated (confirms a sustained rise, not a single frame).
+  //    Rate-limit to one report per 10-second window.
+  // -----------------------------------------------------------------------
   let lastBoredomReport = -999
   for (let i = 2; i < boredomTs.length; i += 1) {
-    if (boredomTs[i] > 65 && boredomTs[i - 1] > 55 && boredomTs[i - 2] > 45) {
-      if (i - lastBoredomReport > 10) {
-        const severity = getSeverity(InsightType.BOREDOM_SPIKE, boredomTs[i])
-        insights.push({
-          type: InsightType.BOREDOM_SPIKE,
-          timestampSeconds: i,
-          severity,
-          title: severity === InsightSeverity.CRITICAL ? 'Critical Attention Drop' : 'High Boredom Risk',
-          description: generateBoredomDescription(i, durationSeconds, severity, format),
-          suggestion: generateBoredomSuggestion(i, durationSeconds, format)
-        })
-        lastBoredomReport = i
-      }
+    const zs = zScore(boredomTs[i], boredomMu, boredomSigma)
+    const rolling3 = rollingMean(boredomTs, i, 3)
+    const rollingZ = zScore(rolling3, boredomMu, boredomSigma)
+    const isTrending = trendAt(boredomTs, i) > 0
+
+    if (zs >= 1.5 && rollingZ >= 1.0 && isTrending && i - lastBoredomReport > 10) {
+      const severity = getSeverityFromZ(zs)
+      insights.push({
+        type: InsightType.BOREDOM_SPIKE,
+        timestampSeconds: i,
+        severity,
+        title: severity === InsightSeverity.CRITICAL ? 'Critical Attention Drop' : 'High Boredom Risk',
+        description: generateBoredomDescription(i, durationSeconds, severity, format, zs),
+        suggestion: generateBoredomSuggestion(i, durationSeconds, format)
+      })
+      lastBoredomReport = i
     }
   }
 
+  // -----------------------------------------------------------------------
+  // 2. EMOTION PEAK DETECTION
+  //    Local maximum above the video's own 75th-percentile emotion score AND
+  //    at least 1.5 standard deviations above the mean.
+  // -----------------------------------------------------------------------
+  const emotionP75 = emotionTs.slice().sort((a, b) => a - b)[Math.floor(emotionTs.length * 0.75)] ?? 75
   for (let i = 3; i < emotionTs.length - 3; i += 1) {
     const isLocalMax =
       emotionTs[i] > emotionTs[i - 1] &&
@@ -95,13 +179,14 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
       emotionTs[i] > emotionTs[i - 2] &&
       emotionTs[i] > emotionTs[i + 2]
 
-    if (isLocalMax && emotionTs[i] > 75) {
+    const zs = zScore(emotionTs[i], emotionMu, emotionSigma)
+    if (isLocalMax && zs >= 1.5 && emotionTs[i] >= emotionP75) {
       insights.push({
         type: InsightType.EMOTION_PEAK,
         timestampSeconds: i,
-        severity: getSeverity(InsightType.EMOTION_PEAK, emotionTs[i]),
+        severity: zs >= 2.5 ? InsightSeverity.HIGH : InsightSeverity.MEDIUM,
         title: 'Emotional Peak',
-        description: `Highest emotional activation at ${formatTime(i)} (TPJ: ${Math.round(emotionTs[i])}/100).`,
+        description: `Highest emotional activation at ${formatTime(i)} (TPJ+MTG: ${Math.round(emotionTs[i])}/100, z=${zs.toFixed(1)}).`,
         suggestion:
           format === 'SHORT_FORM'
             ? `Clip this 5-second window (${formatTime(Math.max(0, i - 2))} - ${formatTime(i + 3)}) for a viral Shorts/Reels moment.`
@@ -112,15 +197,22 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
     }
   }
 
+  // -----------------------------------------------------------------------
+  // 3. HOOK RECOVERY POINT
+  //    Hook signal rises by ≥1.5 sigma above its recent trough.
+  // -----------------------------------------------------------------------
+  const hookP25 = hookTs.slice().sort((a, b) => a - b)[Math.floor(hookTs.length * 0.25)] ?? 40
   for (let i = 5; i < hookTs.length; i += 1) {
     const prevMin = Math.min(...hookTs.slice(i - 5, i))
-    if (prevMin < 40 && hookTs[i] > 75) {
+    const prevMinZ = zScore(prevMin, hookMu, hookSigma)
+    const curZ = zScore(hookTs[i], hookMu, hookSigma)
+    if (prevMin <= hookP25 && curZ >= 1.5 && hookTs[i] - prevMin >= 20) {
       insights.push({
         type: InsightType.HOOK_MOMENT,
         timestampSeconds: i,
         severity: InsightSeverity.MEDIUM,
         title: 'Hook Recovery Point',
-        description: `Strong sensory re-engagement at ${formatTime(i)}.`,
+        description: `Strong sensory re-engagement at ${formatTime(i)} (Hook: ${Math.round(hookTs[i])}/100, z=${curZ.toFixed(1)}).`,
         suggestion:
           format === 'SHORT_FORM'
             ? 'Move this beat into the first 3 seconds to improve swipe retention.'
@@ -131,17 +223,22 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
     }
   }
 
+  // -----------------------------------------------------------------------
+  // 4. WEAK OPENING HOOK
+  //    Opening window hook average is below the video's own 25th percentile.
+  // -----------------------------------------------------------------------
   const openingWindowSeconds = format === 'SHORT_FORM' ? 3 : 10
   const openingHook = hookTs.slice(0, Math.min(openingWindowSeconds, hookTs.length))
-  const avgOpeningHook = openingHook.length ? openingHook.reduce((a, b) => a + b, 0) / openingHook.length : 0
+  const avgOpeningHook = openingHook.length ? mean(openingHook) : 0
+  const openingZ = zScore(avgOpeningHook, hookMu, hookSigma)
 
-  if (openingHook.length > 0 && avgOpeningHook < 40) {
+  if (openingHook.length > 0 && avgOpeningHook <= hookP25 && openingZ <= -0.5) {
     insights.unshift({
       type: InsightType.BOREDOM_SPIKE,
       timestampSeconds: 0,
       severity: InsightSeverity.HIGH,
       title: format === 'SHORT_FORM' ? 'Weak First 3 Seconds' : 'Weak Opening Hook',
-      description: `Your first ${Math.round(openingHook.length)} seconds have low sensory engagement (Hook: ${Math.round(avgOpeningHook)}/100).`,
+      description: `Your first ${Math.round(openingHook.length)} seconds have low sensory engagement (Hook: ${Math.round(avgOpeningHook)}/100, z=${openingZ.toFixed(1)}).`,
       suggestion:
         format === 'SHORT_FORM'
           ? 'Open instantly with your strongest visual and direct payoff. Remove all setup before second 3.'
@@ -151,22 +248,73 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
     })
   }
 
+  // -----------------------------------------------------------------------
+  // 5. SUSTAINED FATIGUE WINDOW (long-form only)
+  //    A 20-second rolling average of boredom exceeds mu + 1.5 * sigma.
+  // -----------------------------------------------------------------------
   if (format === 'LONG_FORM') {
+    const fatigueThreshold = boredomMu + 1.5 * boredomSigma
     for (let i = 19; i < boredomTs.length; i += 1) {
-      const window = boredomTs.slice(i - 19, i + 1)
-      const avgWindow = window.reduce((acc, value) => acc + value, 0) / window.length
-      if (avgWindow > 68) {
+      const windowAvg = rollingMean(boredomTs, i, 20)
+      if (windowAvg > fatigueThreshold) {
+        const wZ = zScore(windowAvg, boredomMu, boredomSigma)
         insights.push({
           type: InsightType.CRITICAL_DROP,
           timestampSeconds: i - 10,
           severity: InsightSeverity.HIGH,
           title: 'Viewer Fatigue Window',
-          description: `Sustained fatigue detected around ${formatTime(i - 10)} (avg boredom ${Math.round(avgWindow)}/100).`,
+          description: `Sustained fatigue around ${formatTime(i - 10)} (20-sec avg boredom ${Math.round(windowAvg)}/100, z=${wZ.toFixed(1)}).`,
           suggestion: 'Insert a visual reset, summary checkpoint, or pace shift to reduce cognitive load in this section.'
         })
         break
       }
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // 6. CROSS-METRIC DEAD ZONE
+  //    Both hook AND emotion are simultaneously below their respective means
+  //    for ≥5 consecutive seconds — the most dangerous attention-loss pattern.
+  // -----------------------------------------------------------------------
+  let deadZoneStart = -1
+  const deadZoneLen = Math.min(hookTs.length, emotionTs.length, boredomTs.length)
+  for (let i = 0; i < deadZoneLen; i += 1) {
+    const hookLow   = hookTs[i]    < hookMu
+    const emotLow   = emotionTs[i] < emotionMu
+    const boredHigh = boredomTs[i] > boredomMu
+
+    if (hookLow && emotLow && boredHigh) {
+      if (deadZoneStart < 0) deadZoneStart = i
+    } else {
+      if (deadZoneStart >= 0 && i - deadZoneStart >= 5) {
+        insights.push({
+          type: InsightType.CRITICAL_DROP,
+          timestampSeconds: deadZoneStart,
+          severity: InsightSeverity.HIGH,
+          title: 'Attention Dead Zone',
+          description: `Hook and emotion both below baseline while boredom is elevated from ${formatTime(deadZoneStart)} to ${formatTime(i - 1)} (${i - deadZoneStart}s).`,
+          suggestion:
+            format === 'SHORT_FORM'
+              ? 'This window is almost certainly a swipe-away moment. Trim it completely.'
+              : 'Insert a pattern interrupt: reaction shot, title card, zoom cut, or direct viewer address.'
+        })
+      }
+      deadZoneStart = -1
+    }
+  }
+  // Handle a dead zone that runs all the way to the end of the arrays.
+  if (deadZoneStart >= 0 && deadZoneLen - deadZoneStart >= 5) {
+    insights.push({
+      type: InsightType.CRITICAL_DROP,
+      timestampSeconds: deadZoneStart,
+      severity: InsightSeverity.HIGH,
+      title: 'Attention Dead Zone',
+      description: `Hook and emotion both below baseline while boredom is elevated from ${formatTime(deadZoneStart)} to ${formatTime(deadZoneLen - 1)} (${deadZoneLen - deadZoneStart}s).`,
+      suggestion:
+        format === 'SHORT_FORM'
+          ? 'This window is almost certainly a swipe-away moment. Trim it completely.'
+          : 'Insert a pattern interrupt: reaction shot, title card, zoom cut, or direct viewer address.'
+    })
   }
 
   insights.sort((a, b) => a.timestampSeconds - b.timestampSeconds)
