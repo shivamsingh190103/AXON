@@ -28,6 +28,12 @@ export var Grade;
     Grade["C"] = "C";
     Grade["D"] = "D";
 })(Grade || (Grade = {}));
+export var FormatType;
+(function (FormatType) {
+    FormatType["SHORT_FORM"] = "SHORT_FORM";
+    FormatType["STANDARD"] = "STANDARD";
+    FormatType["LONG_FORM"] = "LONG_FORM";
+})(FormatType || (FormatType = {}));
 export var InsightType;
 (function (InsightType) {
     InsightType["BOREDOM_SPIKE"] = "BOREDOM_SPIKE";

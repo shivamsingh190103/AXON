@@ -1,4 +1,4 @@
-import type { AnalysisStatus, Grade, InsightSeverity, InsightType, Plan, SourceType } from './enums.js'
+import type { AnalysisStatus, FormatType, Grade, InsightSeverity, InsightType, Plan, SourceType } from './enums.js'
 
 export interface Insight {
   type: InsightType
@@ -21,6 +21,7 @@ export interface AnalysisResult {
   emotionTimeseries: number[]
   rawOutputS3Key?: string | null
   insights: Insight[]
+  formatType: FormatType
   grade: Grade
   gradeSummary: string
   createdAt: string

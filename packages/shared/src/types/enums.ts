@@ -28,6 +28,12 @@ export enum Grade {
   D = 'D'
 }
 
+export enum FormatType {
+  SHORT_FORM = 'SHORT_FORM',
+  STANDARD = 'STANDARD',
+  LONG_FORM = 'LONG_FORM'
+}
+
 export enum InsightType {
   BOREDOM_SPIKE = 'BOREDOM_SPIKE',
   EMOTION_PEAK = 'EMOTION_PEAK',

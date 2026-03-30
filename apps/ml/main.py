@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel
 
-from models import gpu_status, load_models
+from models import gpu_status, load_models, models_ready
 from pipeline.extractor import run_extract
 from pipeline.scorer import run_score
 from pipeline.tribe import run_infer
@@ -25,6 +25,15 @@ ML_SERVICE_SECRET = os.getenv('ML_SERVICE_SECRET', 'internal_secret_for_service_
 def verify_internal_secret(x_ml_secret: Optional[str] = Header(default=None)) -> None:
     if x_ml_secret != ML_SERVICE_SECRET:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Unauthorized internal request')
+
+
+def verify_models_ready() -> None:
+    if not models_ready():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail='Models are still loading. Try again shortly.',
+            headers={'Retry-After': '120'},
+        )
 
 
 class ExtractRequest(BaseModel):
@@ -64,6 +73,7 @@ def health() -> dict:
 
 @app.post('/extract', dependencies=[Depends(verify_internal_secret)])
 def extract(body: ExtractRequest) -> dict:
+    verify_models_ready()
     output = run_extract(body.analysis_id, body.s3_key, body.s3_bucket, body.duration_seconds)
     analysis_duration_cache[body.analysis_id] = output.duration_seconds
     return asdict(output)
@@ -71,9 +81,10 @@ def extract(body: ExtractRequest) -> dict:
 
 @app.post('/infer', dependencies=[Depends(verify_internal_secret)])
 def infer(body: InferRequest) -> dict:
+    verify_models_ready()
     duration = analysis_duration_cache.get(body.analysis_id)
     if duration is None:
-        duration = 120.0
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail='Missing extracted duration for analysis')
 
     output = run_infer(body.analysis_id, body.features_s3_prefix, body.s3_bucket, duration)
     return asdict(output)
@@ -81,7 +92,5 @@ def infer(body: InferRequest) -> dict:
 
 @app.post('/score', dependencies=[Depends(verify_internal_secret)])
 def score(body: ScoreRequest) -> dict:
-    _ = (body.raw_output_s3_key, body.s3_bucket)
-    duration = analysis_duration_cache.get(body.analysis_id, 120.0)
-    output = run_score(body.analysis_id, duration)
+    output = run_score(body.analysis_id, body.raw_output_s3_key, body.s3_bucket)
     return asdict(output)

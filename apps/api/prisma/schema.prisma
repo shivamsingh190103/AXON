@@ -111,6 +111,7 @@ model AnalysisResult {
   insights        Json            // Insight[]
   
   // Grade
+  formatType      FormatType      @default(STANDARD)
   grade           Grade           // A | B | C | D
   gradeSummary    String          // "Strong Retention" | "Needs Work" | etc.
   
@@ -145,4 +146,10 @@ enum Grade {
   B   // 60-79
   C   // 40-59
   D   // 0-39
+}
+
+enum FormatType {
+  SHORT_FORM
+  STANDARD
+  LONG_FORM
 }

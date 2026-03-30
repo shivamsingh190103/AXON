@@ -1,4 +1,4 @@
-import { AnalysisStatus, type Prisma, SourceType } from '@prisma/client'
+import { AnalysisStatus, FormatType, type Prisma, SourceType } from '@prisma/client'
 import { Queue, Worker, type Job } from 'bullmq'
 import { env } from '../lib/env.js'
 import { prisma } from '../lib/prisma.js'
@@ -50,6 +50,12 @@ function normalizeS3Prefix(prefix: string) {
   if (!prefix.startsWith('s3://')) return prefix
   const [, , , ...rest] = prefix.split('/')
   return rest.join('/')
+}
+
+function resolveFormatType(durationSeconds: number) {
+  if (durationSeconds < 180) return FormatType.SHORT_FORM
+  if (durationSeconds > 600) return FormatType.LONG_FORM
+  return FormatType.STANDARD
 }
 
 export async function emitProgress(analysisId: string, update: ProgressUpdate) {
@@ -203,6 +209,7 @@ async function processJob(job: Job<AnalysisJob>) {
   )
 
   const gradeData = gradeFromScore(score.overall_score)
+  const formatType = resolveFormatType(extract.duration_seconds)
 
   const resultPayload: Prisma.AnalysisResultUncheckedCreateInput = {
     analysisId,
@@ -215,6 +222,7 @@ async function processJob(job: Job<AnalysisJob>) {
     emotionTimeseries: score.emotion_timeseries as unknown as Prisma.InputJsonValue,
     rawOutputS3Key: null,
     insights: insights as unknown as Prisma.InputJsonValue,
+    formatType,
     grade: gradeData.grade,
     gradeSummary: gradeData.summary
   }
@@ -232,6 +240,7 @@ async function processJob(job: Job<AnalysisJob>) {
       emotionTimeseries: resultPayload.emotionTimeseries,
       rawOutputS3Key: null,
       insights: resultPayload.insights,
+      formatType,
       grade: resultPayload.grade,
       gradeSummary: resultPayload.gradeSummary
     }

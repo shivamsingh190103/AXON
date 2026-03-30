@@ -73,11 +73,14 @@ export function AnalysisPage() {
   }, [result?.insights])
 
   const analysisFormat = useMemo(() => {
+    const persistedFormat = result?.formatType as 'SHORT_FORM' | 'LONG_FORM' | 'STANDARD' | undefined
+    if (persistedFormat) return persistedFormat
+
     const resolvedDuration = duration || detail?.durationSeconds || 0
     if (resolvedDuration > 0 && resolvedDuration < 180) return 'SHORT_FORM' as const
     if (resolvedDuration > 600) return 'LONG_FORM' as const
     return 'STANDARD' as const
-  }, [detail?.durationSeconds, duration])
+  }, [detail?.durationSeconds, duration, result?.formatType])
 
   const handleSeek = (time: number) => {
     const safeTime = Math.max(0, time)

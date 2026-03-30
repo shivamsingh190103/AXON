@@ -63,13 +63,16 @@ export function AnalysisPage() {
         return insights;
     }, [result?.insights]);
     const analysisFormat = useMemo(() => {
+        const persistedFormat = result?.formatType;
+        if (persistedFormat)
+            return persistedFormat;
         const resolvedDuration = duration || detail?.durationSeconds || 0;
         if (resolvedDuration > 0 && resolvedDuration < 180)
             return 'SHORT_FORM';
         if (resolvedDuration > 600)
             return 'LONG_FORM';
         return 'STANDARD';
-    }, [detail?.durationSeconds, duration]);
+    }, [detail?.durationSeconds, duration, result?.formatType]);
     const handleSeek = (time) => {
         const safeTime = Math.max(0, time);
         currentTimeMv.set(safeTime);
