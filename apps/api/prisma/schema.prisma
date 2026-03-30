@@ -1,0 +1,148 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  avatarUrl     String?
+  passwordHash  String?   // null for OAuth users
+  googleId      String?   @unique
+  plan          Plan      @default(FREE)
+  analyses      Analysis[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Usage tracking
+  analysesThisMonth  Int  @default(0)
+  monthResetAt       DateTime @default(now())
+  
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  
+  @@index([userId])
+}
+
+model Analysis {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Source
+  sourceType      SourceType      // FILE | YOUTUBE_URL
+  originalFilename String?        // "viral-video.mp4"
+  youtubeUrl      String?
+  youtubeVideoId  String?
+  
+  // Storage
+  s3Key           String?         // raw uploaded file
+  processedS3Key  String?         // processed/cleaned version
+  thumbnailS3Key  String?
+  
+  // Video metadata (populated after upload)
+  durationSeconds Float?
+  fileSizeBytes   BigInt?
+  mimeType        String?
+  videoWidth      Int?
+  videoHeight     Int?
+  fps             Float?
+  hasAudio        Boolean?
+  detectedLanguage String?        // "en", "hi", "hi-en" (Hinglish)
+  
+  // Processing status
+  status          AnalysisStatus  @default(QUEUED)
+  jobId           String?         // BullMQ job ID
+  errorMessage    String?         // human-readable error for display
+  errorCode       String?         // machine-readable for telemetry
+  processingStartedAt  DateTime?
+  processingCompletedAt DateTime?
+  
+  // Results (populated after successful processing)
+  result          AnalysisResult?
+  
+  // Metadata
+  title           String?         // user-editable title
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([jobId])
+}
+
+model AnalysisResult {
+  id          String   @id @default(cuid())
+  analysisId  String   @unique
+  analysis    Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  
+  // Summary scores (0-100, integer)
+  overallScore      Int           // weighted composite
+  hookScore         Int           // avg sensory cortices
+  boredomScore      Int           // avg DMN (inverted: high = high boredom RISK)
+  emotionScore      Int           // avg TPJ
+  
+  // Full timeseries data (JSON arrays, one value per second)
+  // Shape: Float[] where index = second of video
+  hookTimeseries      Json        // number[]
+  boredomTimeseries   Json        // number[]  
+  emotionTimeseries   Json        // number[]
+  
+  // Raw TRIBE v2 output reference (stored in S3 for replay/debugging)
+  rawOutputS3Key  String?
+  
+  // Insights (array of insight objects)
+  insights        Json            // Insight[]
+  
+  // Grade
+  grade           Grade           // A | B | C | D
+  gradeSummary    String          // "Strong Retention" | "Needs Work" | etc.
+  
+  createdAt       DateTime        @default(now())
+}
+
+enum Plan {
+  FREE      // 3 analyses/month, max 10min video
+  CREATOR   // 20 analyses/month, max 30min video
+  PRO       // Unlimited, max 2hr video, priority queue
+}
+
+enum SourceType {
+  FILE
+  YOUTUBE_URL
+}
+
+enum AnalysisStatus {
+  QUEUED              // in Redis queue, not yet started
+  DOWNLOADING         // downloading YouTube video
+  EXTRACTING_FEATURES // running V-JEPA2 + Wav2Vec + Llama
+  RUNNING_TRIBE       // running TRIBE v2 inference
+  SCORING             // computing scores from raw output
+  GENERATING_INSIGHTS // generating natural-language insights
+  COMPLETED           // result available
+  FAILED              // terminal failure
+  CANCELLED           // user cancelled
+}
+
+enum Grade {
+  A   // 80-100
+  B   // 60-79
+  C   // 40-59
+  D   // 0-39
+}
