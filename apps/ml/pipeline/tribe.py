@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import os
 from io import BytesIO
 from dataclasses import dataclass
+from pathlib import Path
 
 import boto3
 import numpy as np
@@ -51,11 +53,54 @@ def _clear_cuda_cache(runtime_models) -> None:
         return
 
 
+def _load_decoder(input_dim: int) -> np.ndarray | None:
+    """Try to load a pre-trained linear decoder weight matrix.
+
+    Set the ``TRIBE_DECODER_PATH`` environment variable to the path of a
+    ``.npy`` file containing a float32 array of shape
+    ``(TRIBE_NUM_VERTICES, input_dim)``.  When the real TRIBE v2 brain-to-
+    vertex decoder weights become available this path should be set so that
+    the projection is biologically grounded rather than random.
+    """
+    decoder_path_str = os.getenv('TRIBE_DECODER_PATH', '').strip()
+    if not decoder_path_str:
+        return None
+    decoder_path = Path(decoder_path_str)
+    if not decoder_path.exists():
+        return None
+    try:
+        decoder = np.load(str(decoder_path)).astype(np.float32)
+        if decoder.shape == (TRIBE_NUM_VERTICES, input_dim):
+            return decoder
+        # Tolerate transposed layout
+        if decoder.shape == (input_dim, TRIBE_NUM_VERTICES):
+            return decoder.T
+    except Exception:
+        pass
+    return None
+
+
 def _projection_matrix(input_dim: int) -> np.ndarray:
-    # Deterministic projection for stable vertex count mapping.
-    i = np.arange(TRIBE_NUM_VERTICES, dtype=np.float32)[:, None]
-    j = np.arange(input_dim, dtype=np.float32)[None, :]
-    return np.cos((i + 1) * (j + 1) / 2048.0).astype(np.float32)
+    """Return a (TRIBE_NUM_VERTICES, input_dim) linear decoder matrix.
+
+    Priority order:
+    1. Load from ``TRIBE_DECODER_PATH`` if set — this should be the actual
+       TRIBE v2 trained decoder weights for scientific validity.
+    2. Fall back to a seeded Gaussian random projection (Johnson-Lindenstrauss
+       lemma), which is a mathematically principled, distance-preserving linear
+       map.  It is a valid linear approximation but is **not** biologically
+       grounded — replace with the real decoder as soon as it is available.
+    """
+    decoder = _load_decoder(input_dim)
+    if decoder is not None:
+        return decoder
+
+    # Seeded Gaussian random projection — deterministic, unit-variance,
+    # scaled so that expected squared norms are preserved.
+    rng = np.random.default_rng(seed=42)
+    W = rng.standard_normal((TRIBE_NUM_VERTICES, input_dim)).astype(np.float32)
+    W /= np.sqrt(float(input_dim))
+    return W
 
 
 def _tribe_forward(batch_embeddings: np.ndarray, runtime_models) -> np.ndarray:
