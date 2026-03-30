@@ -9,6 +9,7 @@ import { useAnalysis, useAnalysisStatus } from '@/hooks/useAnalysis'
 import { useAuthStore } from '@/stores/authStore'
 import { Topbar } from '@/components/layout/Topbar'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 import { VideoPlayer } from '@/components/analysis/VideoPlayer'
 import { TimelineTracks } from '@/components/analysis/TimelineTracks'
 import { InsightPanel } from '@/components/analysis/InsightPanel'
@@ -155,7 +156,7 @@ export function AnalysisPage() {
       <Topbar />
       <div className="flex">
         <Sidebar />
-        <main className="grid w-full gap-4 p-4 lg:grid-cols-[1fr_320px] lg:p-6">
+        <main className="grid w-full gap-4 p-4 pb-24 lg:grid-cols-[1fr_320px] lg:p-6 lg:pb-6">
           <section>
             {isProcessing ? (
               <div className="grid min-h-[520px] place-items-center rounded-2xl border border-white/10 bg-[#0b0b16] p-4">
@@ -218,6 +219,7 @@ export function AnalysisPage() {
       </div>
 
       <ShareModal open={shareModalOpen} onClose={() => setShareModalOpen(false)} shareUrl={shareUrl} />
+      <MobileBottomNav />
     </div>
   )
 }

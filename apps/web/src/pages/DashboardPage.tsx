@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { Topbar } from '@/components/layout/Topbar'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 import { PageWrapper } from '@/components/layout/PageWrapper'
 import { useAnalyses } from '@/hooks/useAnalysis'
 import { StatsRow } from '@/components/dashboard/StatsRow'
@@ -60,7 +61,7 @@ export function DashboardPage() {
 
           <UploadCTA onClick={() => setUploadModalOpen(true)} />
 
-          <section className="mt-8">
+          <section id="recent-analyses" className="mt-8">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="display text-sm uppercase tracking-[0.12em] text-slate-300">Recent analyses</h2>
             </div>
@@ -90,6 +91,7 @@ export function DashboardPage() {
       </div>
 
       <UploadModal open={uploadModalOpen} onClose={() => setUploadModalOpen(false)} />
+      <MobileBottomNav />
     </div>
   )
 }

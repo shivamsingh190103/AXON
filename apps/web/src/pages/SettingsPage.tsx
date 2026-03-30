@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Topbar } from '@/components/layout/Topbar'
 import { Sidebar } from '@/components/layout/Sidebar'
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { useAuthStore } from '@/stores/authStore'
@@ -16,7 +17,7 @@ export function SettingsPage() {
       <Topbar />
       <div className="flex">
         <Sidebar />
-        <main className="w-full p-4 lg:p-6">
+        <main className="w-full p-4 pb-24 lg:p-6 lg:pb-6">
           <h1 className="display text-3xl font-extrabold">Settings</h1>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -73,6 +74,7 @@ export function SettingsPage() {
           ) : null}
         </main>
       </div>
+      <MobileBottomNav />
     </div>
   )
 }
