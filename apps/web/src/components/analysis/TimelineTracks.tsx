@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { motion, useTransform, type MotionValue } from 'framer-motion'
 import { clamp } from '@/utils/clamp'
 import { formatTime } from '@/utils/formatTime'
 
@@ -13,7 +14,7 @@ interface Props {
   boredom: number[]
   emotion: number[]
   duration: number
-  currentTime: number
+  currentTimeMv: MotionValue<number>
   onSeek: (time: number) => void
   insightDots: Array<{ timestampSeconds: number; type: 'BOREDOM_SPIKE' | 'EMOTION_PEAK' | 'HOOK_MOMENT' | 'CRITICAL_DROP' }>
 }
@@ -53,8 +54,8 @@ function dotColor(type: string) {
   return 'bg-cyan-400'
 }
 
-export function TimelineTracks({ hook, boredom, emotion, duration, currentTime, onSeek, insightDots }: Props) {
-  const playheadPct = duration > 0 ? (currentTime / duration) * 100 : 0
+export function TimelineTracks({ hook, boredom, emotion, duration, currentTimeMv, onSeek, insightDots }: Props) {
+  const playheadLeft = useTransform(currentTimeMv, (currentTime) => `${duration > 0 ? clamp((currentTime / duration) * 100, 0, 100) : 0}%`)
 
   const seekFromEvent = (event: React.MouseEvent<HTMLDivElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -88,7 +89,7 @@ export function TimelineTracks({ hook, boredom, emotion, duration, currentTime, 
         </div>
       </div>
 
-      <div className="pointer-events-none absolute bottom-5 top-0 ml-[54px] w-[1px] bg-white/90" style={{ left: `${playheadPct}%` }} />
+      <motion.div className="pointer-events-none absolute bottom-5 top-0 ml-[54px] w-[1px] bg-white/90" style={{ left: playheadLeft }} />
     </div>
   )
 }

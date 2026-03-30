@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useMotionValue } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api } from '@/lib/axios'
@@ -25,7 +26,8 @@ export function AnalysisPage() {
   const { data, isLoading, refetch } = useAnalysis(id)
   const detail = data?.data
   const statusQuery = useAnalysisStatus(id, detail?.status !== 'COMPLETED')
-  const [currentTime, setCurrentTime] = useState(0)
+  const currentTimeMv = useMotionValue(0)
+  const [currentSecond, setCurrentSecond] = useState(0)
   const [duration, setDuration] = useState(0)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
 
@@ -61,7 +63,6 @@ export function AnalysisPage() {
   }, [accessToken, id])
 
   const result = detail?.result
-  const currentSecond = Math.floor(currentTime)
 
   const progress = statusQuery.data?.data?.progress ?? 0
   const currentStep = statusQuery.data?.data?.currentStep ?? detail?.status ?? 'QUEUED'
@@ -71,11 +72,20 @@ export function AnalysisPage() {
     return insights
   }, [result?.insights])
 
+  const analysisFormat = useMemo(() => {
+    const resolvedDuration = duration || detail?.durationSeconds || 0
+    if (resolvedDuration > 0 && resolvedDuration < 180) return 'SHORT_FORM' as const
+    if (resolvedDuration > 600) return 'LONG_FORM' as const
+    return 'STANDARD' as const
+  }, [detail?.durationSeconds, duration])
+
   const handleSeek = (time: number) => {
-    setCurrentTime(time)
+    const safeTime = Math.max(0, time)
+    currentTimeMv.set(safeTime)
+    setCurrentSecond(Math.floor(safeTime))
     const video = document.querySelector('video')
     if (video) {
-      video.currentTime = time
+      video.currentTime = safeTime
     }
   }
 
@@ -165,13 +175,13 @@ export function AnalysisPage() {
               </div>
             ) : (
               <>
-                <VideoPlayer src={detail?.playbackUrl ?? null} currentTime={currentTime} onTimeChange={setCurrentTime} onDurationChange={setDuration} />
+                <VideoPlayer src={detail?.playbackUrl ?? null} currentTimeMv={currentTimeMv} onSecondChange={setCurrentSecond} onDurationChange={setDuration} />
                 <TimelineTracks
                   hook={(result?.hookTimeseries as number[]) ?? []}
                   boredom={(result?.boredomTimeseries as number[]) ?? []}
                   emotion={(result?.emotionTimeseries as number[]) ?? []}
                   duration={duration}
-                  currentTime={currentTime}
+                  currentTimeMv={currentTimeMv}
                   onSeek={handleSeek}
                   insightDots={insightDots}
                 />
@@ -191,6 +201,7 @@ export function AnalysisPage() {
                 emotionValues={(result.emotionTimeseries as number[]) ?? []}
                 currentSecond={currentSecond}
                 insights={(result.insights as never[]) ?? []}
+                analysisFormat={analysisFormat}
                 onSeek={handleSeek}
                 onShare={handleShare}
                 onExport={handleExport}

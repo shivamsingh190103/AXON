@@ -1,13 +1,29 @@
 import { InsightSeverity, InsightType, type Insight } from '@axon/shared'
 
+type AnalysisFormat = 'SHORT_FORM' | 'LONG_FORM' | 'STANDARD'
+
 function formatTime(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-function generateBoredomDescription(second: number, total: number, severity: InsightSeverity) {
+function getAnalysisFormat(durationSeconds: number): AnalysisFormat {
+  if (durationSeconds > 0 && durationSeconds < 180) return 'SHORT_FORM'
+  if (durationSeconds > 600) return 'LONG_FORM'
+  return 'STANDARD'
+}
+
+function generateBoredomDescription(second: number, total: number, severity: InsightSeverity, format: AnalysisFormat) {
   const position = second / total
+  if (format === 'SHORT_FORM') {
+    return `Short-form hook risk around ${formatTime(second)}. This moment likely loses swipe-speed viewers.`
+  }
+
+  if (format === 'LONG_FORM' && position > 0.5) {
+    return `Viewer fatigue is rising at ${formatTime(second)}. Narrative momentum is flattening in the long-form arc.`
+  }
+
   if (severity === InsightSeverity.CRITICAL && position < 0.2) {
     return `Critical early drop at ${formatTime(second)}. Viewers are disengaging in the hook window.`
   }
@@ -19,7 +35,15 @@ function generateBoredomDescription(second: number, total: number, severity: Ins
   return `High default-mode activation at ${formatTime(second)} indicates attention drift.`
 }
 
-function generateBoredomSuggestion(second: number, total: number): string {
+function generateBoredomSuggestion(second: number, total: number, format: AnalysisFormat): string {
+  if (format === 'SHORT_FORM') {
+    return 'Fast pattern interrupt needed: cut faster, add kinetic text, and front-load your strongest visual in the next second.'
+  }
+
+  if (format === 'LONG_FORM') {
+    return 'Introduce a visual break, recap the key idea, or switch scene pacing to reduce cognitive fatigue.'
+  }
+
   const position = second / total
   if (position < 0.15) return 'Add a fast B-roll cut, a text overlay with a bold claim, or directly address the viewer with a question.'
   if (position < 0.4) return 'This is your critical retention zone. Add a pattern interrupt: cut to a reaction shot, zoom in dramatically, or add a graphic overlay.'
@@ -44,6 +68,7 @@ function getSeverity(type: InsightType, value: number): InsightSeverity {
 
 export function generateInsights(hookTs: number[], boredomTs: number[], emotionTs: number[], durationSeconds: number): Insight[] {
   const insights: Insight[] = []
+  const format = getAnalysisFormat(durationSeconds)
 
   let lastBoredomReport = -999
   for (let i = 2; i < boredomTs.length; i += 1) {
@@ -55,8 +80,8 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
           timestampSeconds: i,
           severity,
           title: severity === InsightSeverity.CRITICAL ? 'Critical Attention Drop' : 'High Boredom Risk',
-          description: generateBoredomDescription(i, durationSeconds, severity),
-          suggestion: generateBoredomSuggestion(i, durationSeconds)
+          description: generateBoredomDescription(i, durationSeconds, severity, format),
+          suggestion: generateBoredomSuggestion(i, durationSeconds, format)
         })
         lastBoredomReport = i
       }
@@ -77,7 +102,12 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
         severity: getSeverity(InsightType.EMOTION_PEAK, emotionTs[i]),
         title: 'Emotional Peak',
         description: `Highest emotional activation at ${formatTime(i)} (TPJ: ${Math.round(emotionTs[i])}/100).`,
-        suggestion: `Clip this 5-second window (${formatTime(Math.max(0, i - 2))} - ${formatTime(i + 3)}) for a YouTube Short or Instagram Reel.`
+        suggestion:
+          format === 'SHORT_FORM'
+            ? `Clip this 5-second window (${formatTime(Math.max(0, i - 2))} - ${formatTime(i + 3)}) for a viral Shorts/Reels moment.`
+            : format === 'LONG_FORM'
+              ? 'Use this beat as a chapter highlight and reinforce it with a visual callback to sustain long-form attention.'
+              : `Clip this 5-second window (${formatTime(Math.max(0, i - 2))} - ${formatTime(i + 3)}) for a YouTube Short or Instagram Reel.`
       })
     }
   }
@@ -91,12 +121,18 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
         severity: InsightSeverity.MEDIUM,
         title: 'Hook Recovery Point',
         description: `Strong sensory re-engagement at ${formatTime(i)}.`,
-        suggestion: 'Consider moving this segment earlier so the video hooks harder in the opening.'
+        suggestion:
+          format === 'SHORT_FORM'
+            ? 'Move this beat into the first 3 seconds to improve swipe retention.'
+            : format === 'LONG_FORM'
+              ? 'Use this segment as an act transition to recover attention between dense sections.'
+              : 'Consider moving this segment earlier so the video hooks harder in the opening.'
       })
     }
   }
 
-  const openingHook = hookTs.slice(0, Math.min(10, hookTs.length))
+  const openingWindowSeconds = format === 'SHORT_FORM' ? 3 : 10
+  const openingHook = hookTs.slice(0, Math.min(openingWindowSeconds, hookTs.length))
   const avgOpeningHook = openingHook.length ? openingHook.reduce((a, b) => a + b, 0) / openingHook.length : 0
 
   if (openingHook.length > 0 && avgOpeningHook < 40) {
@@ -104,10 +140,33 @@ export function generateInsights(hookTs: number[], boredomTs: number[], emotionT
       type: InsightType.BOREDOM_SPIKE,
       timestampSeconds: 0,
       severity: InsightSeverity.HIGH,
-      title: 'Weak Opening Hook',
+      title: format === 'SHORT_FORM' ? 'Weak First 3 Seconds' : 'Weak Opening Hook',
       description: `Your first ${Math.round(openingHook.length)} seconds have low sensory engagement (Hook: ${Math.round(avgOpeningHook)}/100).`,
-      suggestion: 'Start with your most exciting moment or direct question. Cut intro setup by at least 5 seconds.'
+      suggestion:
+        format === 'SHORT_FORM'
+          ? 'Open instantly with your strongest visual and direct payoff. Remove all setup before second 3.'
+          : format === 'LONG_FORM'
+            ? 'Start with a high-clarity preview of the value and trim any slow preamble.'
+            : 'Start with your most exciting moment or direct question. Cut intro setup by at least 5 seconds.'
     })
+  }
+
+  if (format === 'LONG_FORM') {
+    for (let i = 19; i < boredomTs.length; i += 1) {
+      const window = boredomTs.slice(i - 19, i + 1)
+      const avgWindow = window.reduce((acc, value) => acc + value, 0) / window.length
+      if (avgWindow > 68) {
+        insights.push({
+          type: InsightType.CRITICAL_DROP,
+          timestampSeconds: i - 10,
+          severity: InsightSeverity.HIGH,
+          title: 'Viewer Fatigue Window',
+          description: `Sustained fatigue detected around ${formatTime(i - 10)} (avg boredom ${Math.round(avgWindow)}/100).`,
+          suggestion: 'Insert a visual reset, summary checkpoint, or pace shift to reduce cognitive load in this section.'
+        })
+        break
+      }
+    }
   }
 
   insights.sort((a, b) => a.timestampSeconds - b.timestampSeconds)

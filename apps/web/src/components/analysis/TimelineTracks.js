@@ -1,5 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { useMemo } from 'react';
+import { motion, useTransform } from 'framer-motion';
 import { clamp } from '@/utils/clamp';
 import { formatTime } from '@/utils/formatTime';
 function gradientFromValues(values, color) {
@@ -25,8 +26,8 @@ function dotColor(type) {
         return 'bg-amber-400';
     return 'bg-cyan-400';
 }
-export function TimelineTracks({ hook, boredom, emotion, duration, currentTime, onSeek, insightDots }) {
-    const playheadPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+export function TimelineTracks({ hook, boredom, emotion, duration, currentTimeMv, onSeek, insightDots }) {
+    const playheadLeft = useTransform(currentTimeMv, (currentTime) => `${duration > 0 ? clamp((currentTime / duration) * 100, 0, 100) : 0}%`);
     const seekFromEvent = (event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         const pct = clamp((event.clientX - rect.left) / rect.width, 0, 1);
@@ -38,5 +39,5 @@ export function TimelineTracks({ hook, boredom, emotion, duration, currentTime, 
                                 event.stopPropagation();
                                 onSeek(insight.timestampSeconds);
                             } }, `${insight.type}-${insight.timestampSeconds}-${index}`));
-                    }) }) }), _jsx("div", { className: "pointer-events-none absolute bottom-5 top-0 ml-[54px] w-[1px] bg-white/90", style: { left: `${playheadPct}%` } })] }));
+                    }) }) }), _jsx(motion.div, { className: "pointer-events-none absolute bottom-5 top-0 ml-[54px] w-[1px] bg-white/90", style: { left: playheadLeft } })] }));
 }

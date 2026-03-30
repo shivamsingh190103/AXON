@@ -6,7 +6,9 @@ export default defineConfig({
     resolve: {
         alias: {
             '@': path.resolve(__dirname, 'src')
-        }
+        },
+        // Prefer TypeScript source files when duplicate JS artifacts exist in src/.
+        extensions: ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json']
     },
     build: {
         rollupOptions: {

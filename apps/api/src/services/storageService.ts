@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
-import { deleteObject, getSignedReadUrl, putObject } from '../lib/s3.js'
+import { deleteObject, getSignedReadUrl, listKeysByPrefix, putObject } from '../lib/s3.js'
 import { redis } from '../lib/redis.js'
 
 const PRESIGNED_TTL_SECONDS = 55 * 60
@@ -38,6 +38,13 @@ export class StorageService {
       await deleteObject(key).catch(() => null)
       await redis.del(`presigned:${key}`)
     }
+  }
+
+  async deletePrefix(prefix: string) {
+    if (!prefix) return
+    const keys = await listKeysByPrefix(prefix)
+    if (keys.length === 0) return
+    await this.deleteKeys(keys)
   }
 }
 

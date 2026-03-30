@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { env } from './env.js'
 
@@ -28,6 +28,8 @@ export async function putObject(params: { key: string; body: Buffer; contentType
 }
 
 export async function getSignedReadUrl(key: string, expiresIn = 3600) {
+  // Presigned GET URLs intentionally avoid signing a Range header so browser <video>
+  // elements can issue HTTP range requests for seeking.
   return getSignedUrl(
     s3,
     new GetObjectCommand({
@@ -45,4 +47,27 @@ export async function deleteObject(key: string) {
       Key: key
     })
   )
+}
+
+export async function listKeysByPrefix(prefix: string) {
+  const keys: string[] = []
+  let continuationToken: string | undefined
+
+  do {
+    const response = await s3.send(
+      new ListObjectsV2Command({
+        Bucket: env.S3_BUCKET_NAME,
+        Prefix: prefix,
+        ContinuationToken: continuationToken
+      })
+    )
+
+    for (const item of response.Contents ?? []) {
+      if (item.Key) keys.push(item.Key)
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
+  } while (continuationToken)
+
+  return keys
 }

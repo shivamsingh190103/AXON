@@ -1,22 +1,39 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Maximize, Pause, Play, Volume2, VolumeX } from 'lucide-react'
+import { motion, useTransform, type MotionValue } from 'framer-motion'
 import { formatTime } from '@/utils/formatTime'
+import { clamp } from '@/utils/clamp'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
 
 interface Props {
   src: string | null
-  currentTime: number
-  onTimeChange: (time: number) => void
+  currentTimeMv: MotionValue<number>
+  onSecondChange: (second: number) => void
   onDurationChange: (duration: number) => void
 }
 
-export function VideoPlayer({ src, currentTime, onTimeChange, onDurationChange }: Props) {
+export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChange }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const timeRef = useRef<HTMLSpanElement>(null)
+  const secondRef = useRef(0)
+  const durationRef = useRef(0)
   const [playing, setPlaying] = useState(false)
   const [muted, setMuted] = useState(false)
   const [volume, setVolume] = useState(1)
   const [speed, setSpeed] = useState(1)
+  const [duration, setDuration] = useState(0)
+
+  const progress = useTransform(currentTimeMv, (time) => {
+    if (duration <= 0) return 0
+    return clamp((time / duration) * 100, 0, 100)
+  })
+  const progressWidth = useTransform(progress, (value) => `${value}%`)
+
+  const renderTime = (time: number, totalDuration: number) => {
+    if (!timeRef.current) return
+    timeRef.current.textContent = `${formatTime(time)} / ${formatTime(totalDuration)}`
+  }
 
   useEffect(() => {
     const video = videoRef.current
@@ -24,22 +41,41 @@ export function VideoPlayer({ src, currentTime, onTimeChange, onDurationChange }
 
     let raf = 0
     const loop = () => {
-      onTimeChange(video.currentTime)
+      const time = video.currentTime
+      currentTimeMv.set(time)
+      renderTime(time, durationRef.current)
+
+      const currentSecond = Math.floor(time)
+      if (currentSecond !== secondRef.current) {
+        secondRef.current = currentSecond
+        onSecondChange(currentSecond)
+      }
+
       raf = requestAnimationFrame(loop)
     }
 
     const onLoadedMetadata = () => {
-      onDurationChange(video.duration || 0)
+      const resolvedDuration = Number.isFinite(video.duration) ? video.duration : 0
+      durationRef.current = resolvedDuration
+      setDuration(resolvedDuration)
+      onDurationChange(resolvedDuration)
+      renderTime(video.currentTime, resolvedDuration)
     }
+    const onPlay = () => setPlaying(true)
+    const onPause = () => setPlaying(false)
 
     video.addEventListener('loadedmetadata', onLoadedMetadata)
+    video.addEventListener('play', onPlay)
+    video.addEventListener('pause', onPause)
     raf = requestAnimationFrame(loop)
 
     return () => {
       cancelAnimationFrame(raf)
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
+      video.removeEventListener('play', onPlay)
+      video.removeEventListener('pause', onPause)
     }
-  }, [onDurationChange, onTimeChange])
+  }, [currentTimeMv, onDurationChange, onSecondChange, src])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -73,8 +109,6 @@ export function VideoPlayer({ src, currentTime, onTimeChange, onDurationChange }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
-
-  const duration = useMemo(() => videoRef.current?.duration || 0, [src, currentTime])
 
   const togglePlay = async () => {
     const video = videoRef.current
@@ -112,8 +146,12 @@ export function VideoPlayer({ src, currentTime, onTimeChange, onDurationChange }
     if (!video || !duration) return
 
     const rect = event.currentTarget.getBoundingClientRect()
-    const ratio = (event.clientX - rect.left) / rect.width
-    video.currentTime = Math.max(0, Math.min(duration, ratio * duration))
+    const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+    const nextTime = ratio * duration
+    video.currentTime = nextTime
+    currentTimeMv.set(nextTime)
+    onSecondChange(Math.floor(nextTime))
+    renderTime(nextTime, duration)
   }
 
   const changeVolume = (value: number) => {
@@ -143,13 +181,16 @@ export function VideoPlayer({ src, currentTime, onTimeChange, onDurationChange }
           {playing ? <Pause size={14} /> : <Play size={14} fill="currentColor" />}
         </button>
 
-        <span className="mono text-xs text-slate-300">
-          {formatTime(currentTime)} / {formatTime(duration)}
+        <span ref={timeRef} className="mono text-xs text-slate-300">
+          {formatTime(0)} / {formatTime(duration)}
         </span>
 
         <div className="group relative h-2 flex-1 cursor-pointer rounded bg-[#141424]" onClick={seek}>
-          <div className="h-full rounded bg-[var(--primary)]" style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
-          <div className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full border border-white bg-[var(--primary)] opacity-0 transition group-hover:opacity-100" style={{ left: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }} />
+          <motion.div className="h-full rounded bg-[var(--primary)]" style={{ width: progressWidth }} />
+          <motion.div
+            className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full border border-white bg-[var(--primary)] opacity-0 transition group-hover:opacity-100"
+            style={{ left: progressWidth }}
+          />
         </div>
 
         <button className="focus-ring text-slate-300" onClick={toggleMute}>

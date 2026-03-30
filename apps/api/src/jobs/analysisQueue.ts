@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js'
 import { mlService } from '../services/mlService.js'
 import { generateInsights, gradeFromScore } from '../services/insightService.js'
 import { sendAnalysisFailedEmail } from '../services/emailService.js'
+import { storageService } from '../services/storageService.js'
 import { planLimits } from '../utils/constants.js'
 
 interface AnalysisJob {
@@ -42,6 +43,13 @@ function roomName(analysisId: string) {
 
 function progressKey(analysisId: string) {
   return `progress:${analysisId}`
+}
+
+function normalizeS3Prefix(prefix: string) {
+  if (!prefix) return ''
+  if (!prefix.startsWith('s3://')) return prefix
+  const [, , , ...rest] = prefix.split('/')
+  return rest.join('/')
 }
 
 export async function emitProgress(analysisId: string, update: ProgressUpdate) {
@@ -205,7 +213,7 @@ async function processJob(job: Job<AnalysisJob>) {
     hookTimeseries: score.hook_timeseries as unknown as Prisma.InputJsonValue,
     boredomTimeseries: score.boredom_timeseries as unknown as Prisma.InputJsonValue,
     emotionTimeseries: score.emotion_timeseries as unknown as Prisma.InputJsonValue,
-    rawOutputS3Key: infer.raw_output_s3_key,
+    rawOutputS3Key: null,
     insights: insights as unknown as Prisma.InputJsonValue,
     grade: gradeData.grade,
     gradeSummary: gradeData.summary
@@ -222,11 +230,19 @@ async function processJob(job: Job<AnalysisJob>) {
       hookTimeseries: resultPayload.hookTimeseries,
       boredomTimeseries: resultPayload.boredomTimeseries,
       emotionTimeseries: resultPayload.emotionTimeseries,
-      rawOutputS3Key: resultPayload.rawOutputS3Key,
+      rawOutputS3Key: null,
       insights: resultPayload.insights,
       grade: resultPayload.grade,
       gradeSummary: resultPayload.gradeSummary
     }
+  })
+
+  // CRITICAL CLEANUP: keep source/processed assets, remove massive intermediates.
+  await storageService.deletePrefix(normalizeS3Prefix(extract.features_s3_prefix)).catch((error) => {
+    logger.warn({ error, analysisId }, 'Failed to cleanup feature prefix')
+  })
+  await storageService.deleteKeys([infer.raw_output_s3_key]).catch((error) => {
+    logger.warn({ error, analysisId }, 'Failed to cleanup raw TRIBE output')
   })
 
   await prisma.analysis.update({

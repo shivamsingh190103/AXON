@@ -31,5 +31,20 @@ Neural Content Intelligence Platform monorepo.
 ## Notes
 - The ML service is scaffolded with deterministic mock inference outputs for a runnable end-to-end workflow.
 - Queue, realtime progress, auth refresh, uploads, and share/export flows are wired and operational.
-4. `cd apps/api && npx prisma migrate dev`
-5. `cd ../.. && npm run dev`
+
+## S3 playback requirements
+- S3 bucket CORS must allow `GET` from your `FRONTEND_URL` and `AllowedHeaders: ["*"]`.
+- Presigned playback URLs are generated without signing a `Range` header so browser `<video>` seeking works.
+- Recommended CORS template:
+
+```json
+[
+  {
+    "AllowedHeaders": ["*"],
+    "AllowedMethods": ["GET"],
+    "AllowedOrigins": ["http://localhost:5173"],
+    "ExposeHeaders": ["Accept-Ranges", "Content-Length", "Content-Range", "ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
