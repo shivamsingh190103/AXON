@@ -42,7 +42,7 @@ _runtime_models = RuntimeModels(
 )
 
 _loaded_flags = LoadedModels(vjepa2=False, wav2vec=False, llama=False, tribe=False, whisper=False)
-_current_profile = 'lite'
+_current_profile = 'full'
 _require_full_models = False
 
 
@@ -74,10 +74,36 @@ def _load_transformer_model(model_id: str, torch_dtype: Any | None, hf_token: st
     return AutoModel.from_pretrained(model_id, **kwargs)
 
 
+def _candidate_model_ids(primary_env: str, fallback_env: str, default: str) -> list[str]:
+    primary = os.getenv(primary_env, default).strip()
+    fallback_raw = os.getenv(fallback_env, '').strip()
+    candidates = [primary] if primary else []
+    if fallback_raw:
+        candidates.extend([item.strip() for item in fallback_raw.split(',') if item.strip()])
+    return candidates
+
+
+def _load_first_available_transformer(
+    model_ids: list[str],
+    torch_dtype: Any | None,
+    hf_token: str | None,
+) -> Any:
+    last_error: Exception | None = None
+    for model_id in model_ids:
+        try:
+            return _load_transformer_model(model_id, torch_dtype, hf_token)
+        except Exception as error:
+            last_error = error
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError('No model IDs provided')
+
+
 def load_models() -> LoadedModels:
     global _loaded_flags, _current_profile, _require_full_models
 
-    profile = os.getenv('ML_PROFILE', 'lite').strip().lower()
+    profile = os.getenv('ML_PROFILE', 'full').strip().lower()
     _current_profile = profile
     _require_full_models = _is_true(os.getenv('ML_REQUIRE_FULL_MODELS'), default=profile == 'full')
 
@@ -88,8 +114,8 @@ def load_models() -> LoadedModels:
     enable_whisper = _is_true(os.getenv('ML_ENABLE_WHISPER'), default=True)
 
     hf_token = os.getenv('HF_TOKEN') or None
-    tribe_model_id = os.getenv('TRIBE_MODEL_ID', 'facebook/tribev2')
-    vjepa_model_id = os.getenv('VJEPA_MODEL_ID', 'facebook/vjepa2')
+    tribe_model_ids = _candidate_model_ids('TRIBE_MODEL_ID', 'TRIBE_MODEL_ID_FALLBACK', 'facebook/tribev2')
+    vjepa_model_ids = _candidate_model_ids('VJEPA_MODEL_ID', 'VJEPA_MODEL_ID_FALLBACK', 'facebook/vjepa2')
     wav2vec_model_id = os.getenv('WAV2VEC_MODEL_ID', 'facebook/w2v-bert-2.0')
     llama_model_id = os.getenv('LLAMA_MODEL_ID', 'meta-llama/Llama-3.2-3B-Instruct')
     whisper_model_size = os.getenv('WHISPER_MODEL_SIZE', 'small')
@@ -114,7 +140,7 @@ def load_models() -> LoadedModels:
 
     if enable_vjepa:
         try:
-            _runtime_models.vjepa2_model = _load_transformer_model(vjepa_model_id, torch_dtype, hf_token)
+            _runtime_models.vjepa2_model = _load_first_available_transformer(vjepa_model_ids, torch_dtype, hf_token)
             if _runtime_models.torch is not None:
                 _runtime_models.vjepa2_model.to(_runtime_models.device)
             _runtime_models.vjepa2_model.eval()
@@ -182,7 +208,7 @@ def load_models() -> LoadedModels:
 
     if enable_tribe:
         try:
-            _runtime_models.tribe_model = _load_transformer_model(tribe_model_id, torch_dtype, hf_token)
+            _runtime_models.tribe_model = _load_first_available_transformer(tribe_model_ids, torch_dtype, hf_token)
             if _runtime_models.torch is not None:
                 _runtime_models.tribe_model.to(_runtime_models.device)
             _runtime_models.tribe_model.eval()
