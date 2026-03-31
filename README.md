@@ -181,6 +181,7 @@ AXON/
 
 - **Node.js** v20+ and npm
 - **Docker & Docker Compose** (for PostgreSQL, Redis, MinIO)
+- **YouTube processing binaries** (API host): `yt-dlp`, `ffmpeg`, `ffprobe`
 - **Hugging Face account** with `meta-llama/Llama-3.2-3B-Instruct` access accepted (gated model — requires Meta approval on the HF model page)
 - **AWS S3 bucket** or MinIO (for feature/video storage)
 
@@ -193,6 +194,7 @@ Test the full UI, API flow, and job queue without renting a GPU. The mock ML lay
 git clone https://github.com/shivamsingh190103/AXON.git
 cd AXON
 npm install
+npm run build --workspace=@axon/shared
 ```
 
 **2. Configure environment:**

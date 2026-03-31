@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { motion } from 'framer-motion';
-export function SplashPage() {
-    return (_jsx("div", { className: "grid min-h-screen place-items-center bg-[#04040a]", children: _jsxs(motion.div, { initial: { opacity: 0, y: 8 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.6, type: 'spring' }, className: "text-center", children: [_jsx("div", { className: "mx-auto mb-4 grid size-16 place-items-center rounded-2xl bg-[radial-gradient(circle_at_30%_20%,rgba(124,109,250,0.8),rgba(124,109,250,0.2))] shadow-[0_0_40px_rgba(124,109,250,0.3)]", children: _jsx("span", { className: "display text-2xl font-extrabold", children: "A" }) }), _jsx(motion.h1, { className: "display text-4xl font-extrabold tracking-[0.14em]", initial: { letterSpacing: '0.3em' }, animate: { letterSpacing: '0.14em' }, transition: { duration: 0.8 }, children: "AXON" }), _jsx(motion.p, { className: "mono mt-3 text-[11px] tracking-[0.2em] text-slate-500", initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { delay: 0.45 }, children: "NEURAL CONTENT INTELLIGENCE" })] }) }));
-}

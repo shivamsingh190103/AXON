@@ -1,4 +1,5 @@
 import { AnalysisStatus, FormatType, type Prisma, SourceType } from '@prisma/client'
+import { readFile } from 'node:fs/promises'
 import { Queue, Worker, type Job } from 'bullmq'
 import { env } from '../lib/env.js'
 import { prisma } from '../lib/prisma.js'
@@ -9,6 +10,7 @@ import { mlService } from '../services/mlService.js'
 import { generateInsights, gradeFromScore } from '../services/insightService.js'
 import { sendAnalysisFailedEmail } from '../services/emailService.js'
 import { storageService } from '../services/storageService.js'
+import { youtubeService } from '../services/youtubeService.js'
 import { planLimits } from '../utils/constants.js'
 
 interface AnalysisJob {
@@ -56,6 +58,13 @@ function resolveFormatType(durationSeconds: number) {
   if (durationSeconds < 180) return FormatType.SHORT_FORM
   if (durationSeconds > 600) return FormatType.LONG_FORM
   return FormatType.STANDARD
+}
+
+function sanitizeFileStem(value: string | null | undefined) {
+  const raw = (value ?? '').trim()
+  if (!raw) return 'youtube-video'
+  const sanitized = raw.replace(/[^a-zA-Z0-9-_]+/g, '_').replace(/^_+|_+$/g, '')
+  return sanitized || 'youtube-video'
 }
 
 export async function emitProgress(analysisId: string, update: ProgressUpdate) {
@@ -290,25 +299,56 @@ async function processJob(job: Job<AnalysisJob>) {
   let s3Key = analysis.s3Key
 
   if (sourceType === SourceType.YOUTUBE_URL) {
+    if (!analysis.youtubeUrl) {
+      throw new Error('Missing YouTube URL for analysis')
+    }
+
     await updateStatus(analysisId, AnalysisStatus.DOWNLOADING, 0, 'Downloading YouTube source...')
+    const downloaded = await youtubeService.downloadToTemp(analysisId, analysis.youtubeUrl)
 
-    // Dev-safe placeholder; production should run yt-dlp and upload real file.
-    s3Key = analysis.s3Key ?? `raw/${analysisId}/source.mp4`
-    await prisma.analysis.update({
-      where: { id: analysisId },
-      data: {
-        s3Key,
-        sourceType: SourceType.YOUTUBE_URL,
-        durationSeconds: analysis.durationSeconds ?? 240,
-        fileSizeBytes: analysis.fileSizeBytes ?? BigInt(100 * 1024 * 1024)
+    try {
+      const planLimit = planLimits[analysis.user.plan]
+      if (downloaded.durationSeconds && downloaded.durationSeconds > planLimit.maxDurationSeconds) {
+        const err = new Error('Video duration exceeds plan limit')
+        ;(err as Error & { code?: string }).code = 'VIDEO_TOO_LONG_FOR_PLAN'
+        throw err
       }
-    })
 
-    await emitProgress(analysisId, {
-      status: AnalysisStatus.DOWNLOADING,
-      progress: 10,
-      currentStep: 'Download complete'
-    })
+      const videoBuffer = await readFile(downloaded.filePath)
+      const filenameStem = sanitizeFileStem(downloaded.title ?? downloaded.videoId ?? analysis.youtubeVideoId ?? analysisId)
+
+      s3Key = await storageService.uploadVideo({
+        analysisId,
+        originalFilename: `${filenameStem}.mp4`,
+        contentType: 'video/mp4',
+        buffer: videoBuffer
+      })
+
+      await prisma.analysis.update({
+        where: { id: analysisId },
+        data: {
+          s3Key,
+          sourceType: SourceType.YOUTUBE_URL,
+          youtubeVideoId: downloaded.videoId ?? analysis.youtubeVideoId,
+          title: analysis.title ?? downloaded.title ?? undefined,
+          durationSeconds: downloaded.durationSeconds ?? analysis.durationSeconds,
+          fileSizeBytes: downloaded.fileSizeBytes ? BigInt(Math.round(downloaded.fileSizeBytes)) : BigInt(videoBuffer.length),
+          mimeType: 'video/mp4',
+          videoWidth: downloaded.width,
+          videoHeight: downloaded.height,
+          fps: downloaded.fps,
+          hasAudio: downloaded.hasAudio
+        }
+      })
+
+      await emitProgress(analysisId, {
+        status: AnalysisStatus.DOWNLOADING,
+        progress: 10,
+        currentStep: 'Download complete'
+      })
+    } finally {
+      await youtubeService.cleanupTempFile(downloaded.filePath)
+    }
   }
 
   if (!s3Key) {

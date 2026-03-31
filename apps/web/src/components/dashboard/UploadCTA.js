@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { ArrowRight, UploadCloud } from 'lucide-react';
-export function UploadCTA({ onClick }) {
-    return (_jsxs("button", { onClick: onClick, className: "liquid-glass-primary focus-ring relative mt-6 flex w-full items-center gap-4 rounded-2xl border border-[rgba(124,109,250,0.25)] p-5 text-left transition hover:-translate-y-0.5 hover:border-[rgba(124,109,250,0.4)] hover:shadow-[0_0_40px_rgba(124,109,250,0.15)]", children: [_jsx("div", { className: "flex size-11 items-center justify-center rounded-xl bg-[var(--primary)]/20 text-violet-200", children: _jsx(UploadCloud, { size: 20 }) }), _jsxs("div", { className: "flex-1", children: [_jsx("p", { className: "display text-base font-bold", children: "Analyse a new video" }), _jsx("p", { className: "text-sm text-slate-400", children: "Upload a file or paste a YouTube URL to generate a neural engagement report." })] }), _jsx(ArrowRight, { className: "text-[var(--primary)]" })] }));
-}

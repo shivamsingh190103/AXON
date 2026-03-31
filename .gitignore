@@ -13,3 +13,6 @@ __pycache__
 *.pyc
 apps/api/prisma/dev.db
 apps/ml/.venv
+apps/web/src/**/*.js
+packages/shared/src/**/*.js
+apps/web/vite.config.js
