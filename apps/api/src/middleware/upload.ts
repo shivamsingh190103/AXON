@@ -16,7 +16,9 @@ const allowedMimes = new Set([
   'audio/aac',
   'audio/flac',
   'audio/ogg',
-  'audio/webm'
+  'audio/webm',
+  'audio/opus',
+  'application/ogg'
 ])
 
 const allowedExtensions = new Set([
@@ -30,7 +32,8 @@ const allowedExtensions = new Set([
   '.m4a',
   '.aac',
   '.flac',
-  '.ogg'
+  '.ogg',
+  '.opus'
 ])
 
 export const MAX_UPLOAD_BYTES = 500 * 1024 * 1024 // 500 MB

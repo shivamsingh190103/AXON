@@ -53,12 +53,14 @@ const ACCEPTED_MEDIA_TYPES = {
   'audio/mp4': ['.m4a'],
   'audio/aac': ['.aac'],
   'audio/flac': ['.flac'],
-  'audio/ogg': ['.ogg'],
-  'audio/webm': ['.webm']
+  'audio/ogg': ['.ogg', '.opus'],
+  'audio/opus': ['.opus'],
+  'audio/webm': ['.webm'],
+  'application/ogg': ['.ogg', '.opus']
 } as const
 
 const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.mkv', '.avi', '.webm'])
-const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.webm'])
+const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.webm'])
 
 function formatDuration(seconds?: number) {
   if (!seconds || !Number.isFinite(seconds)) return 'Unknown'
@@ -234,7 +236,7 @@ export function UploadModal({ open, onClose }: Props) {
       }
 
       if (wrongType) {
-        toast.error('Unsupported format. Use MP4/MOV/MKV/AVI/WebM for video or MP3/WAV/M4A for audio.')
+        toast.error('Unsupported format. Use MP4/MOV/MKV/AVI/WebM for video or MP3/WAV/M4A/OPUS for audio.')
         return
       }
 
@@ -416,7 +418,7 @@ export function UploadModal({ open, onClose }: Props) {
                 <CloudUpload className="mx-auto mb-3 text-slate-400" />
                 <p className="font-semibold">Drop your file here</p>
                 <p className="mono mt-1 text-xs text-slate-500">
-                  {AUDIO_ONLY_TYPES.includes(selectedContentType) ? 'MP3, WAV, M4A' : 'MP4, MOV, MKV, AVI, WebM'} · Max {(maxFileSize / (1024 * 1024)).toFixed(0)} MB
+                  {AUDIO_ONLY_TYPES.includes(selectedContentType) ? 'MP3, WAV, M4A, OPUS' : 'MP4, MOV, MKV, AVI, WebM'} · Max {(maxFileSize / (1024 * 1024)).toFixed(0)} MB
                 </p>
               </div>
 

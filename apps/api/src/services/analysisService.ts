@@ -32,6 +32,22 @@ function mediaFamilyFromMime(mimeType: string): 'audio' | 'video' | 'unknown' {
   const lower = mimeType.toLowerCase()
   if (lower.startsWith('audio/')) return 'audio'
   if (lower.startsWith('video/')) return 'video'
+  if (lower === 'application/ogg') return 'audio'
+  return 'unknown'
+}
+
+function mediaFamilyFromUpload(file: Express.Multer.File): 'audio' | 'video' | 'unknown' {
+  const byMime = mediaFamilyFromMime(file.mimetype)
+  if (byMime !== 'unknown') return byMime
+
+  const name = file.originalname.toLowerCase()
+  if (name.endsWith('.opus') || name.endsWith('.ogg') || name.endsWith('.mp3') || name.endsWith('.wav') || name.endsWith('.m4a') || name.endsWith('.aac') || name.endsWith('.flac')) {
+    return 'audio'
+  }
+  if (name.endsWith('.mp4') || name.endsWith('.mov') || name.endsWith('.mkv') || name.endsWith('.avi') || name.endsWith('.webm')) {
+    return 'video'
+  }
+
   return 'unknown'
 }
 
@@ -192,7 +208,7 @@ export const analysisService = {
     await enforceQueueDepth(params.userId)
 
     const expectedFamily = AUDIO_ONLY_CONTENT_TYPES.has(params.contentType) ? 'audio' : 'video'
-    const actualFamily = mediaFamilyFromMime(params.file.mimetype)
+    const actualFamily = mediaFamilyFromUpload(params.file)
     if (actualFamily === 'unknown') {
       throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported media type for analysis.')
     }
