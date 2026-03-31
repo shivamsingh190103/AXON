@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { AlertTriangle, Bolt, Star } from 'lucide-react'
+import { AlertTriangle, Bolt, Download, HeartPulse, PlusCircle, Share2, Sparkles, TriangleAlert, Trash2, Zap } from 'lucide-react'
 import { METRICS_BY_CONTENT_TYPE, type ContentType } from '@axon/shared'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -7,6 +7,7 @@ import { ScoreRing } from './ScoreRing'
 import { formatTime } from '@/utils/formatTime'
 import { scoreToColor } from '@/utils/scoreToColor'
 import type { Insight } from '@axon/shared'
+import { Symbol } from '@/lib/symbol'
 
 interface Props {
   contentType: ContentType
@@ -92,7 +93,7 @@ export function InsightPanel({
 
     if (emotionNow > 80) {
       return {
-        icon: <Star size={16} />,
+        icon: <Sparkles size={16} />,
         title: `${metricLabels.emotion} Peak - ${emotionNow}/100`,
         message: analysisFormat === 'SHORT_FORM'
           ? 'Clip this as a viral moment for Shorts/Reels.'
@@ -152,12 +153,14 @@ export function InsightPanel({
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-slate-400">Metrics</p>
         <div className="space-y-2">
           {[
-            { label: metricLabels.hook, value: hookScore, color: 'bg-cyan-400', seekTo: peakMoments.hook },
-            { label: metricLabels.boredom, value: boredomScore, color: 'bg-rose-400', seekTo: peakMoments.boredom },
-            { label: metricLabels.emotion, value: emotionScore, color: 'bg-amber-400', seekTo: peakMoments.emotion }
+            { label: metricLabels.hook, value: hookScore, color: 'bg-cyan-400', seekTo: peakMoments.hook, icon: Zap },
+            { label: metricLabels.boredom, value: boredomScore, color: 'bg-rose-400', seekTo: peakMoments.boredom, icon: TriangleAlert },
+            { label: metricLabels.emotion, value: emotionScore, color: 'bg-amber-400', seekTo: peakMoments.emotion, icon: HeartPulse }
           ].map((metric) => (
             <button key={metric.label} className="focus-ring flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/5" onClick={() => onSeek(metric.seekTo)}>
-              <span className={`size-2 rounded-full ${metric.color}`} />
+              <span className={`grid size-5 place-items-center rounded-full ${metric.color}/15 text-white`}>
+                <Symbol icon={metric.icon} size={12} className="opacity-90" />
+              </span>
               <span className="text-sm text-slate-300">{metric.label}</span>
               <div className="mx-2 h-1 flex-1 rounded bg-white/10">
                 <div className={`h-full rounded ${metric.color}`} style={{ width: `${metric.value}%` }} />
@@ -200,7 +203,23 @@ export function InsightPanel({
               onClick={() => onSeek(insight.timestampSeconds)}
             >
               <div className="mb-1 flex items-center justify-between">
-                <Badge color={insight.type === 'BOREDOM_SPIKE' ? 'red' : insight.type === 'EMOTION_PEAK' ? 'amber' : 'cyan'}>{insight.type.replaceAll('_', ' ')}</Badge>
+                <Badge color={insight.type === 'BOREDOM_SPIKE' ? 'red' : insight.type === 'EMOTION_PEAK' ? 'amber' : 'cyan'}>
+                  <span className="inline-flex items-center gap-1">
+                    <Symbol
+                      icon={
+                        insight.type === 'BOREDOM_SPIKE'
+                          ? AlertTriangle
+                          : insight.type === 'EMOTION_PEAK'
+                            ? Sparkles
+                            : insight.type === 'CRITICAL_DROP'
+                              ? TriangleAlert
+                              : Bolt
+                      }
+                      size={11}
+                    />
+                    {insight.type.replaceAll('_', ' ')}
+                  </span>
+                </Badge>
                 <span className="mono text-xs text-slate-500">{formatTime(insight.timestampSeconds)}</span>
               </div>
               <p>{insight.description}</p>
@@ -211,10 +230,22 @@ export function InsightPanel({
 
       <section className="liquid-glass rounded-2xl p-4">
         <div className="space-y-2">
-          <Button fullWidth onClick={onExport}>Export as JSON</Button>
-          <Button fullWidth variant="secondary" onClick={onShare}>Share report</Button>
-          <Button fullWidth variant="ghost" onClick={() => (window.location.href = '/dashboard')}>Analyse another video</Button>
-          <button className="focus-ring w-full text-center text-xs text-rose-300" onClick={onDelete}>Delete this analysis</button>
+          <Button fullWidth onClick={onExport}>
+            <Symbol icon={Download} size={14} />
+            Export as JSON
+          </Button>
+          <Button fullWidth variant="secondary" onClick={onShare}>
+            <Symbol icon={Share2} size={14} />
+            Share report
+          </Button>
+          <Button fullWidth variant="ghost" onClick={() => (window.location.href = '/dashboard')}>
+            <Symbol icon={PlusCircle} size={14} />
+            Analyse another video
+          </Button>
+          <button className="focus-ring inline-flex w-full items-center justify-center gap-1 text-center text-xs text-rose-300" onClick={onDelete}>
+            <Symbol icon={Trash2} size={13} />
+            Delete this analysis
+          </button>
         </div>
       </section>
     </aside>

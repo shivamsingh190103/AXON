@@ -1,7 +1,8 @@
 import { motion } from 'framer-motion'
-import { AlertTriangle, Play, Sparkles } from 'lucide-react'
+import { AlertTriangle, Clock3, Play, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/Badge'
+import { Symbol } from '@/lib/symbol'
 import { formatTime } from '@/utils/formatTime'
 
 interface Props {
@@ -23,6 +24,8 @@ function statusBadge(status: string) {
 export function ProjectCard({ id, title, originalFilename, status, createdAt, durationSeconds, overallScore }: Props) {
   const navigate = useNavigate()
   const name = title || originalFilename || 'Untitled analysis'
+  const isFailed = status === 'FAILED'
+  const isCompleted = status === 'COMPLETED'
 
   return (
     <motion.button
@@ -36,16 +39,22 @@ export function ProjectCard({ id, title, originalFilename, status, createdAt, du
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_65%_25%,rgba(124,109,250,0.35),transparent_45%)]" />
         <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
           <span className="mono text-[10px] uppercase tracking-[0.12em] text-slate-300">Neural Map</span>
-          {status === 'FAILED' ? <AlertTriangle size={16} className="text-rose-300" /> : <Sparkles size={16} className="text-violet-200" />}
+          {isFailed ? (
+            <Symbol icon={AlertTriangle} size={16} className="text-rose-300" />
+          ) : isCompleted ? (
+            <Symbol icon={Sparkles} size={16} className="text-violet-200" />
+          ) : (
+            <Symbol icon={Clock3} size={16} className="text-amber-300" />
+          )}
         </div>
         <div className="absolute inset-0 grid place-items-center">
-          {status === 'FAILED' ? (
+          {isFailed ? (
             <div className="rounded-full bg-rose-500/20 p-3 text-rose-300">
-              <AlertTriangle size={18} />
+              <Symbol icon={AlertTriangle} size={18} />
             </div>
           ) : (
             <div className="rounded-full bg-black/50 p-3 text-white transition group-hover:scale-110 group-hover:bg-[var(--primary)]">
-              <Play size={18} fill="currentColor" />
+              <Play size={18} fill="currentColor" strokeWidth={1.9} absoluteStrokeWidth />
             </div>
           )}
         </div>

@@ -1,7 +1,8 @@
 import clsx from 'clsx'
-import { AudioWaveform, Grid2X2, PlusCircle, Settings } from 'lucide-react'
+import { Activity, LayoutGrid, Settings2, UploadCloud } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useUiStore } from '@/stores/uiStore'
+import { Symbol } from '@/lib/symbol'
 
 export function MobileBottomNav() {
   const navigate = useNavigate()
@@ -9,9 +10,9 @@ export function MobileBottomNav() {
   const setUploadModalOpen = useUiStore((s) => s.setUploadModalOpen)
 
   const items = [
-    { key: 'home', label: 'Home', icon: Grid2X2, to: '/dashboard', active: location.pathname === '/dashboard' && location.hash !== '#recent-analyses' },
-    { key: 'analyses', label: 'Analyses', icon: AudioWaveform, to: '/dashboard#recent-analyses', active: location.pathname.startsWith('/analysis') || location.hash === '#recent-analyses' },
-    { key: 'settings', label: 'Settings', icon: Settings, to: '/settings', active: location.pathname === '/settings' }
+    { key: 'home', label: 'Home', icon: LayoutGrid, to: '/dashboard', active: location.pathname === '/dashboard' && location.hash !== '#recent-analyses' },
+    { key: 'analyses', label: 'Analyses', icon: Activity, to: '/dashboard#recent-analyses', active: location.pathname.startsWith('/analysis') || location.hash === '#recent-analyses' },
+    { key: 'settings', label: 'Settings', icon: Settings2, to: '/settings', active: location.pathname === '/settings' }
   ]
 
   const openUpload = () => {
@@ -39,7 +40,7 @@ export function MobileBottomNav() {
                 )}
                 aria-label={item.label}
               >
-                <Icon size={18} />
+                <Symbol icon={Icon} size={18} />
                 <span>{item.label}</span>
               </button>
             </li>
@@ -53,7 +54,7 @@ export function MobileBottomNav() {
             className="focus-ring mx-auto flex flex-col items-center gap-1 rounded-xl bg-[var(--primary)]/25 px-2 py-1.5 text-[10px] font-medium text-violet-100"
             aria-label="Upload"
           >
-            <PlusCircle size={20} />
+            <Symbol icon={UploadCloud} size={18} />
             <span>Upload</span>
           </button>
         </li>
@@ -71,7 +72,7 @@ export function MobileBottomNav() {
                 )}
                 aria-label={item.label}
               >
-                <Icon size={18} />
+                <Symbol icon={Icon} size={18} />
                 <span>{item.label}</span>
               </button>
             </li>

@@ -1,16 +1,23 @@
 import { useState } from 'react'
+import { BellRing, CreditCard, Download, ShieldAlert, UserRound } from 'lucide-react'
 import { Topbar } from '@/components/layout/Topbar'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { Symbol } from '@/lib/symbol'
 import { useAuthStore } from '@/stores/authStore'
 
-const tabs = ['Account', 'Plan & Billing', 'Notifications', 'Danger Zone'] as const
+const tabs = [
+  { label: 'Account', icon: UserRound },
+  { label: 'Plan & Billing', icon: CreditCard },
+  { label: 'Notifications', icon: BellRing },
+  { label: 'Danger Zone', icon: ShieldAlert }
+] as const
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user)
-  const [tab, setTab] = useState<(typeof tabs)[number]>('Account')
+  const [tab, setTab] = useState<(typeof tabs)[number]['label']>('Account')
 
   return (
     <div className="min-h-screen">
@@ -22,8 +29,13 @@ export function SettingsPage() {
 
           <div className="mt-4 flex flex-wrap gap-2">
             {tabs.map((item) => (
-              <button key={item} className={`focus-ring rounded-xl px-3 py-2 text-sm ${tab === item ? 'bg-[var(--primary)]/25 text-white' : 'bg-white/5 text-slate-300'}`} onClick={() => setTab(item)}>
-                {item}
+              <button
+                key={item.label}
+                className={`focus-ring inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm ${tab === item.label ? 'bg-[var(--primary)]/25 text-white' : 'bg-white/5 text-slate-300'}`}
+                onClick={() => setTab(item.label)}
+              >
+                <Symbol icon={item.icon} size={14} />
+                {item.label}
               </button>
             ))}
           </div>
@@ -34,7 +46,10 @@ export function SettingsPage() {
               <Input defaultValue={user?.name ?? ''} />
               <label className="mb-2 mt-4 block text-sm text-slate-300">Email</label>
               <Input value={user?.email ?? ''} disabled />
-              <Button className="mt-5">Save changes</Button>
+              <Button className="mt-5">
+                <Symbol icon={UserRound} size={14} />
+                Save changes
+              </Button>
             </section>
           ) : null}
 
@@ -47,6 +62,7 @@ export function SettingsPage() {
                     <p className="display text-xl font-bold">{plan.title}</p>
                     <p className="mt-1 text-sm text-slate-400">{plan.price}</p>
                     <Button className="mt-3" variant={user?.plan === plan.title ? 'secondary' : 'primary'}>
+                      <Symbol icon={CreditCard} size={14} />
                       {user?.plan === plan.title ? 'Current plan' : 'Upgrade'}
                     </Button>
                   </div>
@@ -67,8 +83,14 @@ export function SettingsPage() {
             <section className="mt-6 rounded-2xl border border-rose-400/30 bg-rose-500/10 p-5 text-sm text-rose-100">
               <p className="mb-3">Delete account or export your data.</p>
               <div className="flex gap-2">
-                <Button variant="danger">Delete account</Button>
-                <Button variant="ghost">Export all data</Button>
+                <Button variant="danger">
+                  <Symbol icon={ShieldAlert} size={14} />
+                  Delete account
+                </Button>
+                <Button variant="ghost">
+                  <Symbol icon={Download} size={14} />
+                  Export all data
+                </Button>
               </div>
             </section>
           ) : null}

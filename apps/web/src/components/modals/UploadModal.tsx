@@ -1,7 +1,25 @@
 import { useMemo, useState } from 'react'
 import { type ContentType, AUDIO_ONLY_TYPES, CONTENT_TYPE_GROUPS, EXPECTED_DURATION, VIDEO_TYPES } from '@axon/shared'
 import { isAxiosError } from 'axios'
-import { CheckCircle2, CloudUpload, Info, Link2, Lock, TriangleAlert, XCircle } from 'lucide-react'
+import {
+  BookOpenText,
+  CheckCircle2,
+  Clapperboard,
+  CloudUpload,
+  Info,
+  Link2,
+  Lock,
+  Megaphone,
+  Mic2,
+  Podcast,
+  Presentation,
+  Radio,
+  Smartphone,
+  TriangleAlert,
+  Tv,
+  XCircle,
+  Youtube
+} from 'lucide-react'
 import { useDropzone } from 'react-dropzone'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -10,6 +28,7 @@ import { queryClient } from '@/lib/queryClient'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Modal } from '@/components/ui/Modal'
+import { Symbol } from '@/lib/symbol'
 
 interface Props {
   open: boolean
@@ -103,6 +122,35 @@ function findContentTypeMeta(contentType: ContentType) {
   }
 
   return null
+}
+
+function iconForContentType(contentType: ContentType) {
+  switch (contentType) {
+    case 'YOUTUBE_VIDEO':
+    case 'YOUTUBE_SHORT':
+      return Youtube
+    case 'INSTAGRAM_REEL':
+    case 'TIKTOK_SHORT':
+      return Smartphone
+    case 'PODCAST_EPISODE':
+    case 'PODCAST_CLIP':
+      return Podcast
+    case 'AUDIO_AD':
+      return Mic2
+    case 'LIVE_STREAM':
+      return Radio
+    case 'WEBINAR':
+      return Presentation
+    case 'COURSE_LESSON':
+    case 'LECTURE_RECORDING':
+      return BookOpenText
+    case 'AD_CREATIVE':
+      return Megaphone
+    case 'PRODUCT_DEMO':
+      return Tv
+    default:
+      return Clapperboard
+  }
 }
 
 export function UploadModal({ open, onClose }: Props) {
@@ -311,6 +359,7 @@ export function UploadModal({ open, onClose }: Props) {
                 <div className="grid gap-2 sm:grid-cols-2">
                   {group.options.map((option) => {
                     const active = selectedContentType === option.type
+                    const Icon = iconForContentType(option.type)
                     return (
                       <button
                         key={option.type}
@@ -325,6 +374,9 @@ export function UploadModal({ open, onClose }: Props) {
                         }}
                         type="button"
                       >
+                        <div className="mb-1 inline-flex size-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-200">
+                          <Symbol icon={Icon} size={14} />
+                        </div>
                         <p className="text-sm font-semibold text-white">{option.title}</p>
                         <p className="mt-1 text-xs text-slate-400">{option.subtitle}</p>
                       </button>
@@ -441,4 +493,3 @@ export function UploadModal({ open, onClose }: Props) {
     </Modal>
   )
 }
-
