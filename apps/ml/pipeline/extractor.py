@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from io import BytesIO
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,7 @@ from utils.ffmpeg_helpers import ensure_tmp_dir
 VJEPA_BATCH_FRAMES = 64
 VIDEO_EMBED_FPS = 16
 WHISPER_TASK = 'translate'
+AUDIO_ONLY_TYPES = {'PODCAST_EPISODE', 'PODCAST_CLIP', 'AUDIO_AD'}
 
 
 @dataclass
@@ -70,6 +72,19 @@ def _probe_duration(video_path: Path) -> float:
             return float(stream['duration'])
 
     raise RuntimeError('Could not determine video duration')
+
+
+def _resolve_video_embed_dim(runtime_models: Any) -> int:
+    env_value = os.getenv('VIDEO_EMBED_DIM', '768').strip()
+    env_dim = int(env_value) if env_value.isdigit() else 768
+
+    model = runtime_models.vjepa2_model
+    config = getattr(model, 'config', None)
+    hidden_size = getattr(config, 'hidden_size', None) if config is not None else None
+    if isinstance(hidden_size, int) and hidden_size > 0:
+        return hidden_size
+
+    return env_dim
 
 
 def _extract_audio(video_path: Path, audio_path: Path) -> None:
@@ -297,10 +312,17 @@ def _extract_text_embeddings(text: str, seconds: int, runtime_models: Any) -> np
     return tiled.astype(np.float32)
 
 
-def run_extract(analysis_id: str, s3_key: str, bucket: str, duration_seconds: float | None = None) -> ExtractOutput:
+def run_extract(
+    analysis_id: str,
+    s3_key: str,
+    bucket: str,
+    duration_seconds: float | None = None,
+    content_type: str | None = None
+) -> ExtractOutput:
     runtime_models = get_runtime_models()
     work_dir = ensure_tmp_dir(analysis_id)
-    source_video_path = work_dir / 'source.mp4'
+    source_suffix = Path(s3_key).suffix or '.bin'
+    source_video_path = work_dir / f'source_media{source_suffix}'
     audio_path = work_dir / 'audio.wav'
 
     _download_s3_file(bucket, s3_key, source_video_path)
@@ -314,9 +336,17 @@ def run_extract(analysis_id: str, s3_key: str, bucket: str, duration_seconds: fl
     transcript, detected_language, full_text = _transcribe(audio_path, runtime_models)
 
     second_count = max(1, int(math.ceil(resolved_duration)))
-    video_embeddings = _extract_video_embeddings(source_video_path, resolved_duration, runtime_models)
+    is_audio_only = (content_type or '').upper() in AUDIO_ONLY_TYPES
     audio_embeddings = _extract_audio_embeddings(audio_path, second_count, runtime_models)
     text_embeddings = _extract_text_embeddings(full_text, second_count, runtime_models)
+
+    if is_audio_only:
+        video_embeddings = np.zeros(
+            (audio_embeddings.shape[0], _resolve_video_embed_dim(runtime_models)),
+            dtype=np.float32
+        )
+    else:
+        video_embeddings = _extract_video_embeddings(source_video_path, resolved_duration, runtime_models)
 
     min_seconds = min(video_embeddings.shape[0], audio_embeddings.shape[0], text_embeddings.shape[0], second_count)
     video_embeddings = video_embeddings[:min_seconds]

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { type ContentType, ContentType as ContentTypeEnum, SHORT_FORM_TYPES } from '@axon/shared'
 import { useMotionValue } from 'framer-motion'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -65,6 +66,7 @@ export function AnalysisPage() {
   }, [accessToken, id])
 
   const result = detail?.result
+  const contentType = (detail?.contentType as ContentType | undefined) ?? ContentTypeEnum.YOUTUBE_VIDEO
 
   const progress = statusQuery.data?.data?.progress ?? 0
   const currentStep = statusQuery.data?.data?.currentStep ?? detail?.status ?? 'QUEUED'
@@ -84,13 +86,31 @@ export function AnalysisPage() {
     return 'STANDARD' as const
   }, [detail?.durationSeconds, duration, result?.formatType])
 
+  const isShortFormContent = useMemo(() => {
+    return SHORT_FORM_TYPES.includes(contentType)
+  }, [contentType])
+
+  const openingScore = useMemo(() => {
+    if (!result || !isShortFormContent) return null
+    const hook = ((result.hookTimeseries as number[]) ?? []).slice(0, 3)
+    const boredom = ((result.boredomTimeseries as number[]) ?? []).slice(0, 3)
+    const emotion = ((result.emotionTimeseries as number[]) ?? []).slice(0, 3)
+    if (!hook.length || !boredom.length || !emotion.length) return null
+
+    const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length
+    const hookMean = mean(hook)
+    const boredomMean = mean(boredom)
+    const emotionMean = mean(emotion)
+    return Math.round(hookMean * 0.45 + (100 - boredomMean) * 0.3 + emotionMean * 0.25)
+  }, [isShortFormContent, result])
+
   const handleSeek = (time: number) => {
     const safeTime = Math.max(0, time)
     currentTimeMv.set(safeTime)
     setCurrentSecond(Math.floor(safeTime))
-    const video = document.querySelector('video')
-    if (video) {
-      video.currentTime = safeTime
+    const media = document.querySelector('video, audio') as HTMLMediaElement | null
+    if (media) {
+      media.currentTime = safeTime
     }
   }
 
@@ -189,8 +209,18 @@ export function AnalysisPage() {
               </div>
             ) : (
               <>
-                <VideoPlayer src={detail?.playbackUrl ?? null} currentTimeMv={currentTimeMv} onSecondChange={setCurrentSecond} onDurationChange={setDuration} />
+                <div className={isShortFormContent ? 'mx-auto w-full max-w-[420px]' : ''}>
+                  <VideoPlayer
+                    src={detail?.playbackUrl ?? null}
+                    contentType={contentType}
+                    portraitMode={isShortFormContent}
+                    currentTimeMv={currentTimeMv}
+                    onSecondChange={setCurrentSecond}
+                    onDurationChange={setDuration}
+                  />
+                </div>
                 <TimelineTracks
+                  contentType={contentType}
                   hook={(result?.hookTimeseries as number[]) ?? []}
                   boredom={(result?.boredomTimeseries as number[]) ?? []}
                   emotion={(result?.emotionTimeseries as number[]) ?? []}
@@ -204,8 +234,21 @@ export function AnalysisPage() {
           </section>
 
           <section>
+            {openingScore !== null ? (
+              <div className="liquid-glass mb-3 rounded-2xl border border-violet-500/30 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="mono text-xs uppercase tracking-[0.12em] text-violet-200">Opening 3s Score</p>
+                  <span className="display text-2xl font-extrabold text-violet-100">{openingScore}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-300">
+                  First impression score for short-form retention. Prioritize this window for scroll-stop performance.
+                </p>
+              </div>
+            ) : null}
+
             {result ? (
               <InsightPanel
+                contentType={contentType}
                 overallScore={result.overallScore}
                 hookScore={result.hookScore}
                 boredomScore={result.boredomScore}

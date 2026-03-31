@@ -3,7 +3,7 @@ import cors from 'cors'
 import express from 'express'
 import helmet from 'helmet'
 import passport from './lib/passport.js'
-import { env } from './lib/env.js'
+import { isAllowedOrigin } from './lib/origins.js'
 import apiRouter from './routes/index.js'
 import { ensureCsrfCookie, csrfProtection } from './middleware/csrf.js'
 import { defaultRateLimit } from './middleware/rateLimit.js'
@@ -22,7 +22,14 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: [env.FRONTEND_URL],
+      origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+          callback(null, true)
+          return
+        }
+
+        callback(new Error(`Origin "${origin ?? 'unknown'}" is not allowed by CORS`))
+      },
       credentials: true
     })
   )

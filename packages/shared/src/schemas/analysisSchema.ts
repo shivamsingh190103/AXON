@@ -1,9 +1,16 @@
 import { z } from 'zod'
+import { ContentType } from '../types/enums.js'
 
 const cuidSchema = z.string().regex(/^c[a-z0-9]{24}$/i, 'Invalid analysis id')
 
 export const createYoutubeAnalysisSchema = z.object({
-  url: z.string().url('Please provide a valid URL')
+  url: z.string().url('Please provide a valid URL'),
+  contentType: z.nativeEnum(ContentType)
+})
+
+export const createUploadAnalysisSchema = z.object({
+  contentType: z.nativeEnum(ContentType),
+  durationSeconds: z.coerce.number().positive().optional()
 })
 
 export const updateAnalysisSchema = z.object({
@@ -31,3 +38,4 @@ export const shareTokenParamSchema = z.object({
 })
 
 export type CreateYoutubeAnalysisInput = z.infer<typeof createYoutubeAnalysisSchema>
+export type CreateUploadAnalysisInput = z.infer<typeof createUploadAnalysisSchema>

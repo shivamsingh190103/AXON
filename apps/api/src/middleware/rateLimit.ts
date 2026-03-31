@@ -2,16 +2,20 @@ import rateLimit from 'express-rate-limit'
 import { RedisStore } from 'rate-limit-redis'
 import { redis } from '../lib/redis.js'
 
-const store = new RedisStore({
-  sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as unknown as Promise<any>
-})
+function createStore(prefix: string) {
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args: string[]) => redis.call(args[0], ...args.slice(1)) as unknown as Promise<any>
+  })
+}
 
 export const defaultRateLimit = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  store,
+  passOnStoreError: true,
+  store: createStore('rl:default:'),
   keyGenerator: (req) => req.userId ?? req.ip ?? 'unknown-ip'
 })
 
@@ -20,7 +24,8 @@ export const loginRateLimit = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  store,
+  passOnStoreError: true,
+  store: createStore('rl:login:'),
   keyGenerator: (req) => req.ip ?? 'unknown-ip',
   message: {
     success: false,
@@ -36,7 +41,8 @@ export const uploadRateLimit = rateLimit({
   max: 5,
   standardHeaders: true,
   legacyHeaders: false,
-  store,
+  passOnStoreError: true,
+  store: createStore('rl:upload:'),
   keyGenerator: (req) => req.userId ?? req.ip ?? 'unknown-ip'
 })
 
@@ -45,6 +51,7 @@ export const youtubeRateLimit = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  store,
+  passOnStoreError: true,
+  store: createStore('rl:youtube:'),
   keyGenerator: (req) => req.userId ?? req.ip ?? 'unknown-ip'
 })

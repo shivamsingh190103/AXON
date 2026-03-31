@@ -6,6 +6,12 @@ import { refreshCookieOptions } from '../services/tokenService.js'
 import { ok, noContent } from '../utils/http.js'
 
 export const authController = {
+  async csrf(req: Request, res: Response) {
+    ok(res, {
+      csrfToken: req.cookies.csrf_token ?? null
+    })
+  },
+
   async register(req: Request, res: Response) {
     const input = registerSchema.parse(req.body)
     const result = await authService.register(input)

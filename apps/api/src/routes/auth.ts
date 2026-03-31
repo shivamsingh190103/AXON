@@ -9,6 +9,7 @@ import { env } from '../lib/env.js'
 const router = Router()
 const googleEnabled = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET && env.GOOGLE_CALLBACK_URL)
 
+router.get('/csrf', asyncHandler(authController.csrf))
 router.post('/register', asyncHandler(authController.register))
 router.post('/login', loginRateLimit, asyncHandler(authController.login))
 router.post('/logout', requireAuth, asyncHandler(authController.logout))

@@ -33,7 +33,7 @@ export interface ScoreResponse {
 }
 
 export const mlService = {
-  async extract(body: { analysis_id: string; s3_key: string; s3_bucket: string; duration_seconds?: number }) {
+  async extract(body: { analysis_id: string; s3_key: string; s3_bucket: string; duration_seconds?: number; content_type?: string }) {
     const { data } = await client.post<ExtractResponse>('/extract', body, { timeout: 20 * 60 * 1000 })
     return data
   },

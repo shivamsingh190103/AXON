@@ -20,6 +20,7 @@ export function serializeAnalysis(analysis: Analysis & { result?: AnalysisResult
     id: analysis.id,
     userId: analysis.userId,
     sourceType: analysis.sourceType,
+    contentType: analysis.contentType,
     title: analysis.title,
     originalFilename: analysis.originalFilename,
     youtubeUrl: analysis.youtubeUrl,

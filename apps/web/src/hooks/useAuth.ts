@@ -15,6 +15,7 @@ export function useInitializeAuth() {
 
     const bootstrap = async () => {
       try {
+        await api.get('/auth/csrf')
         const refresh = await api.post('/auth/refresh', {})
         const payload = refresh.data?.data
         if (!payload?.accessToken || !payload?.user) {

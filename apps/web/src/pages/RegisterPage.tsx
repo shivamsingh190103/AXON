@@ -39,6 +39,7 @@ export function RegisterPage() {
     resolver: zodResolver(registerSchema),
     mode: 'onBlur'
   })
+  const passwordField = register('password')
 
   const onSubmit = handleSubmit(async (values) => {
     try {
@@ -48,11 +49,43 @@ export function RegisterPage() {
       toast.success('Welcome to AXON')
       navigate('/dashboard')
     } catch (error: unknown) {
-      const code = (error as { response?: { data?: { error?: { code?: string } } } }).response?.data?.error?.code
+      const apiError = (error as {
+        response?: {
+          data?: {
+            error?: {
+              code?: string
+              message?: string
+              details?: {
+                fieldErrors?: Record<string, string[]>
+              }
+            }
+          }
+        }
+      }).response?.data?.error
+      const code = apiError?.code
+
+      if (!apiError) {
+        toast.error('Cannot reach server. Make sure API is running and try again.')
+        return
+      }
+
       if (code === 'EMAIL_EXISTS') {
         toast.error('Email already exists')
+      } else if (code === 'CSRF_MISMATCH') {
+        toast.error('Session check failed. Please refresh and try again.')
+      } else if (code === 'DATABASE_UNAVAILABLE') {
+        toast.error('Database is offline. Start PostgreSQL, then try creating your account again.')
+      } else if (code === 'DATABASE_SCHEMA_NOT_READY') {
+        toast.error('Database schema is not ready. Run Prisma migrations, then retry.')
+      } else if (code === 'REDIS_UNAVAILABLE') {
+        toast.error('Redis is offline. Start Redis and retry.')
+      } else if (code === 'VALIDATION_ERROR') {
+        const firstFieldError = Object.values(apiError.details?.fieldErrors ?? {})
+          .flat()
+          .find((message) => Boolean(message))
+        toast.error(firstFieldError ?? 'Please check your details and try again.')
       } else {
-        toast.error('Something went wrong. Please try again.')
+        toast.error(apiError.message ?? 'Something went wrong. Please try again.')
       }
     }
   })
@@ -72,7 +105,16 @@ export function RegisterPage() {
         {errors.email?.message ? <p className="error-text">{errors.email.message}</p> : null}
 
         <label className="mb-2 mt-4 block text-sm text-slate-300">Password</label>
-        <Input type="password" autoComplete="new-password" {...register('password')} onChange={(event) => setPassword(event.target.value)} error={errors.password?.message} />
+        <Input
+          type="password"
+          autoComplete="new-password"
+          {...passwordField}
+          onChange={(event) => {
+            passwordField.onChange(event)
+            setPassword(event.target.value)
+          }}
+          error={errors.password?.message}
+        />
         {errors.password?.message ? <p className="error-text">{errors.password.message}</p> : null}
 
         <div className="mt-3 grid grid-cols-4 gap-2">

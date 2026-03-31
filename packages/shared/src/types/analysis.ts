@@ -1,4 +1,4 @@
-import type { AnalysisStatus, FormatType, Grade, InsightSeverity, InsightType, Plan, SourceType } from './enums.js'
+import type { AnalysisStatus, ContentType, FormatType, Grade, InsightSeverity, InsightType, Plan, SourceType } from './enums.js'
 
 export interface Insight {
   type: InsightType
@@ -32,6 +32,7 @@ export interface AnalysisSummary {
   title?: string | null
   originalFilename?: string | null
   sourceType: SourceType
+  contentType: ContentType
   status: AnalysisStatus
   createdAt: string
   durationSeconds?: number | null

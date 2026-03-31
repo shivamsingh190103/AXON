@@ -47,6 +47,7 @@ model Analysis {
   
   // Source
   sourceType      SourceType      // FILE | YOUTUBE_URL
+  contentType     ContentType     @default(YOUTUBE_VIDEO)
   originalFilename String?        // "viral-video.mp4"
   youtubeUrl      String?
   youtubeVideoId  String?
@@ -127,6 +128,22 @@ enum Plan {
 enum SourceType {
   FILE
   YOUTUBE_URL
+}
+
+enum ContentType {
+  YOUTUBE_VIDEO
+  YOUTUBE_SHORT
+  INSTAGRAM_REEL
+  TIKTOK_SHORT
+  PODCAST_EPISODE
+  PODCAST_CLIP
+  AUDIO_AD
+  LIVE_STREAM
+  WEBINAR
+  COURSE_LESSON
+  LECTURE_RECORDING
+  AD_CREATIVE
+  PRODUCT_DEMO
 }
 
 enum AnalysisStatus {

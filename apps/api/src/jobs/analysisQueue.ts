@@ -1,4 +1,4 @@
-import { AnalysisStatus, FormatType, type Prisma, SourceType } from '@prisma/client'
+import { AnalysisStatus, ContentType, FormatType, type Prisma, SourceType } from '@prisma/client'
 import { readFile } from 'node:fs/promises'
 import { Queue, Worker, type Job } from 'bullmq'
 import { env } from '../lib/env.js'
@@ -17,6 +17,7 @@ interface AnalysisJob {
   analysisId: string
   userId: string
   sourceType: SourceType
+  contentType: ContentType
   s3Key?: string
   youtubeUrl?: string
 }
@@ -360,7 +361,8 @@ async function processJob(job: Job<AnalysisJob>) {
     analysis_id: analysisId,
     s3_key: s3Key,
     s3_bucket: env.S3_BUCKET_NAME,
-    duration_seconds: analysis.durationSeconds ?? undefined
+    duration_seconds: analysis.durationSeconds ?? undefined,
+    content_type: analysis.contentType
   })
 
   await emitProgress(analysisId, {

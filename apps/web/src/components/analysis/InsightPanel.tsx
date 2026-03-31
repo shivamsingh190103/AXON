@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { AlertTriangle, Bolt, Star } from 'lucide-react'
+import { METRICS_BY_CONTENT_TYPE, type ContentType } from '@axon/shared'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { ScoreRing } from './ScoreRing'
@@ -8,6 +9,7 @@ import { scoreToColor } from '@/utils/scoreToColor'
 import type { Insight } from '@axon/shared'
 
 interface Props {
+  contentType: ContentType
   overallScore: number
   hookScore: number
   boredomScore: number
@@ -32,6 +34,7 @@ function scoreSummary(score: number) {
 }
 
 export function InsightPanel({
+  contentType,
   overallScore,
   hookScore,
   boredomScore,
@@ -47,6 +50,7 @@ export function InsightPanel({
   onExport,
   onDelete
 }: Props) {
+  const metricLabels = METRICS_BY_CONTENT_TYPE[contentType]
   const hookNow = Math.round(hookValues[currentSecond] ?? hookValues[0] ?? 0)
   const boredomNow = Math.round(boredomValues[currentSecond] ?? boredomValues[0] ?? 0)
   const emotionNow = Math.round(emotionValues[currentSecond] ?? emotionValues[0] ?? 0)
@@ -76,7 +80,7 @@ export function InsightPanel({
     if (boredomNow > 70) {
       return {
         icon: <AlertTriangle size={16} />,
-        title: `High Boredom Risk - DMN ${boredomNow}/100`,
+        title: `High ${metricLabels.boredom} - ${boredomNow}/100`,
         message: analysisFormat === 'SHORT_FORM'
           ? 'Fast pattern interrupt needed for social retention.'
           : analysisFormat === 'LONG_FORM'
@@ -89,7 +93,7 @@ export function InsightPanel({
     if (emotionNow > 80) {
       return {
         icon: <Star size={16} />,
-        title: `Emotional Peak - TPJ ${emotionNow}/100`,
+        title: `${metricLabels.emotion} Peak - ${emotionNow}/100`,
         message: analysisFormat === 'SHORT_FORM'
           ? 'Clip this as a viral moment for Shorts/Reels.'
           : analysisFormat === 'LONG_FORM'
@@ -102,7 +106,7 @@ export function InsightPanel({
     if (hookNow > 80) {
       return {
         icon: <Bolt size={16} />,
-        title: `Strong Hook - Visual+Audio ${hookNow}/100`,
+        title: `Strong ${metricLabels.hook} - ${hookNow}/100`,
         message: analysisFormat === 'SHORT_FORM'
           ? 'This opening pattern is short-form ready.'
           : analysisFormat === 'LONG_FORM'
@@ -113,7 +117,7 @@ export function InsightPanel({
     }
 
     return null
-  }, [analysisFormat, boredomNow, emotionNow, hookNow])
+  }, [analysisFormat, boredomNow, emotionNow, hookNow, metricLabels.boredom, metricLabels.emotion, metricLabels.hook])
 
   const formatBadgeLabel =
     analysisFormat === 'SHORT_FORM'
@@ -148,9 +152,9 @@ export function InsightPanel({
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-slate-400">Metrics</p>
         <div className="space-y-2">
           {[
-            { label: 'Sensory Hook', value: hookScore, color: 'bg-cyan-400', seekTo: peakMoments.hook },
-            { label: 'Boredom Risk', value: boredomScore, color: 'bg-rose-400', seekTo: peakMoments.boredom },
-            { label: 'Emotional Impact', value: emotionScore, color: 'bg-amber-400', seekTo: peakMoments.emotion }
+            { label: metricLabels.hook, value: hookScore, color: 'bg-cyan-400', seekTo: peakMoments.hook },
+            { label: metricLabels.boredom, value: boredomScore, color: 'bg-rose-400', seekTo: peakMoments.boredom },
+            { label: metricLabels.emotion, value: emotionScore, color: 'bg-amber-400', seekTo: peakMoments.emotion }
           ].map((metric) => (
             <button key={metric.label} className="focus-ring flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-white/5" onClick={() => onSeek(metric.seekTo)}>
               <span className={`size-2 rounded-full ${metric.color}`} />
@@ -167,9 +171,9 @@ export function InsightPanel({
       <section className="liquid-glass rounded-2xl p-4">
         <h4 className="display text-lg font-bold">At {formatTime(currentSecond)}</h4>
         <div className="mt-2 space-y-1 text-sm text-slate-300">
-          <p>Hook: {hookNow}</p>
-          <p>Boredom: {boredomNow}</p>
-          <p>Emotion: {emotionNow}</p>
+          <p>{metricLabels.hook}: {hookNow}</p>
+          <p>{metricLabels.boredom}: {boredomNow}</p>
+          <p>{metricLabels.emotion}: {emotionNow}</p>
         </div>
 
         {liveCard ? (

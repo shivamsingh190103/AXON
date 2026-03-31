@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
+import { Prisma } from '@prisma/client'
 import { StatusCodes } from 'http-status-codes'
 import multer from 'multer'
 import { ZodError } from 'zod'
@@ -16,6 +17,42 @@ export function notFoundHandler(_req: Request, res: Response) {
 }
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
+  if (err instanceof Prisma.PrismaClientInitializationError) {
+    res.status(StatusCodes.SERVICE_UNAVAILABLE).json({
+      success: false,
+      error: {
+        code: 'DATABASE_UNAVAILABLE',
+        message: 'Database is unavailable. Start PostgreSQL and try again.'
+      }
+    })
+    return
+  }
+
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2021' || err.code === 'P2022') {
+      res.status(StatusCodes.SERVICE_UNAVAILABLE).json({
+        success: false,
+        error: {
+          code: 'DATABASE_SCHEMA_NOT_READY',
+          message: 'Database schema is not ready. Run Prisma migrations and retry.'
+        }
+      })
+      return
+    }
+  }
+
+  const message = (err as Error)?.message ?? ''
+  if (/redis/i.test(message) && /econnrefused|connect|socket|closed/i.test(message)) {
+    res.status(StatusCodes.SERVICE_UNAVAILABLE).json({
+      success: false,
+      error: {
+        code: 'REDIS_UNAVAILABLE',
+        message: 'Redis is unavailable. Start Redis and try again.'
+      }
+    })
+    return
+  }
+
   if (err instanceof multer.MulterError) {
     const statusCode = err.code === 'LIMIT_FILE_SIZE' ? 413 : StatusCodes.BAD_REQUEST
     const code = err.code === 'LIMIT_FILE_SIZE' ? 'FILE_TOO_LARGE' : 'UPLOAD_ERROR'

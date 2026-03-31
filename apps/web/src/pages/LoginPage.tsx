@@ -42,12 +42,26 @@ export function LoginPage() {
     } catch (error: unknown) {
       setShake(true)
       setTimeout(() => setShake(false), 450)
-      const message = (error as { response?: { data?: { error?: { code?: string } } } }).response?.data?.error?.code
+      const apiError = (error as { response?: { data?: { error?: { code?: string; message?: string } } } }).response?.data?.error
+      const code = apiError?.code
 
-      if (message === 'INVALID_CREDENTIALS') {
+      if (!apiError) {
+        toast.error('Cannot reach server. Make sure API is running and try again.')
+        return
+      }
+
+      if (code === 'INVALID_CREDENTIALS') {
         toast.error('Invalid credentials. Please try again.')
+      } else if (code === 'CSRF_MISMATCH') {
+        toast.error('Session check failed. Please refresh and try again.')
+      } else if (code === 'DATABASE_UNAVAILABLE') {
+        toast.error('Database is offline. Start PostgreSQL and retry.')
+      } else if (code === 'DATABASE_SCHEMA_NOT_READY') {
+        toast.error('Database schema is not ready. Run Prisma migrations and retry.')
+      } else if (code === 'REDIS_UNAVAILABLE') {
+        toast.error('Redis is offline. Start Redis and retry.')
       } else {
-        toast.error('Connection error. Check your internet and try again.')
+        toast.error(apiError.message ?? 'Connection error. Check your internet and try again.')
       }
     }
   })

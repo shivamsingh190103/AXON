@@ -1,20 +1,25 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { type ContentType, AUDIO_ONLY_TYPES } from '@axon/shared'
 import { Maximize, Pause, Play, Volume2, VolumeX } from 'lucide-react'
 import { motion, useTransform, type MotionValue } from 'framer-motion'
-import { formatTime } from '@/utils/formatTime'
 import { clamp } from '@/utils/clamp'
+import { formatTime } from '@/utils/formatTime'
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2]
+const WAVEFORM_BARS = Array.from({ length: 48 }, (_, index) => index)
 
 interface Props {
   src: string | null
+  contentType: ContentType
+  portraitMode?: boolean
   currentTimeMv: MotionValue<number>
   onSecondChange: (second: number) => void
   onDurationChange: (duration: number) => void
 }
 
-export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChange }: Props) {
+export function VideoPlayer({ src, contentType, portraitMode = false, currentTimeMv, onSecondChange, onDurationChange }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
   const timeRef = useRef<HTMLSpanElement>(null)
   const secondRef = useRef(0)
   const durationRef = useRef(0)
@@ -23,6 +28,7 @@ export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChan
   const [volume, setVolume] = useState(1)
   const [speed, setSpeed] = useState(1)
   const [duration, setDuration] = useState(0)
+  const isAudioOnly = useMemo(() => AUDIO_ONLY_TYPES.includes(contentType), [contentType])
 
   const progress = useTransform(currentTimeMv, (time) => {
     if (duration <= 0) return 0
@@ -30,18 +36,20 @@ export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChan
   })
   const progressWidth = useTransform(progress, (value) => `${value}%`)
 
+  const getMedia = () => (isAudioOnly ? audioRef.current : videoRef.current)
+
   const renderTime = (time: number, totalDuration: number) => {
     if (!timeRef.current) return
     timeRef.current.textContent = `${formatTime(time)} / ${formatTime(totalDuration)}`
   }
 
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
+    const media = getMedia()
+    if (!media) return
 
     let raf = 0
     const loop = () => {
-      const time = video.currentTime
+      const time = media.currentTime
       currentTimeMv.set(time)
       renderTime(time, durationRef.current)
 
@@ -55,122 +63,160 @@ export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChan
     }
 
     const onLoadedMetadata = () => {
-      const resolvedDuration = Number.isFinite(video.duration) ? video.duration : 0
+      const resolvedDuration = Number.isFinite(media.duration) ? media.duration : 0
       durationRef.current = resolvedDuration
       setDuration(resolvedDuration)
       onDurationChange(resolvedDuration)
-      renderTime(video.currentTime, resolvedDuration)
+      renderTime(media.currentTime, resolvedDuration)
     }
     const onPlay = () => setPlaying(true)
     const onPause = () => setPlaying(false)
 
-    video.addEventListener('loadedmetadata', onLoadedMetadata)
-    video.addEventListener('play', onPlay)
-    video.addEventListener('pause', onPause)
+    media.addEventListener('loadedmetadata', onLoadedMetadata)
+    media.addEventListener('play', onPlay)
+    media.addEventListener('pause', onPause)
     raf = requestAnimationFrame(loop)
 
     return () => {
       cancelAnimationFrame(raf)
-      video.removeEventListener('loadedmetadata', onLoadedMetadata)
-      video.removeEventListener('play', onPlay)
-      video.removeEventListener('pause', onPause)
+      media.removeEventListener('loadedmetadata', onLoadedMetadata)
+      media.removeEventListener('play', onPlay)
+      media.removeEventListener('pause', onPause)
     }
-  }, [currentTimeMv, onDurationChange, onSecondChange, src])
+  }, [currentTimeMv, isAudioOnly, onDurationChange, onSecondChange, src])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const video = videoRef.current
-      if (!video) return
+      const media = getMedia()
+      if (!media) return
 
       if (event.key === ' ') {
         event.preventDefault()
-        if (video.paused) {
-          void video.play()
+        if (media.paused) {
+          void media.play()
           setPlaying(true)
         } else {
-          video.pause()
+          media.pause()
           setPlaying(false)
         }
       }
 
-      if (event.key === 'ArrowLeft') video.currentTime = Math.max(0, video.currentTime - 5)
-      if (event.key === 'ArrowRight') video.currentTime = video.currentTime + 5
-      if (event.key.toLowerCase() === 'j') video.currentTime = Math.max(0, video.currentTime - 10)
-      if (event.key.toLowerCase() === 'l') video.currentTime = video.currentTime + 10
+      if (event.key === 'ArrowLeft') media.currentTime = Math.max(0, media.currentTime - 5)
+      if (event.key === 'ArrowRight') media.currentTime = media.currentTime + 5
+      if (event.key.toLowerCase() === 'j') media.currentTime = Math.max(0, media.currentTime - 10)
+      if (event.key.toLowerCase() === 'l') media.currentTime = media.currentTime + 10
       if (event.key.toLowerCase() === 'm') {
-        video.muted = !video.muted
-        setMuted(video.muted)
+        media.muted = !media.muted
+        setMuted(media.muted)
       }
-      if (event.key.toLowerCase() === 'f') {
-        void video.requestFullscreen()
+      if (!isAudioOnly && event.key.toLowerCase() === 'f') {
+        void videoRef.current?.requestFullscreen()
       }
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [isAudioOnly])
 
   const togglePlay = async () => {
-    const video = videoRef.current
-    if (!video) return
+    const media = getMedia()
+    if (!media) return
 
-    if (video.paused) {
-      await video.play()
+    if (media.paused) {
+      await media.play()
       setPlaying(true)
     } else {
-      video.pause()
+      media.pause()
       setPlaying(false)
     }
   }
 
   const toggleMute = () => {
-    const video = videoRef.current
-    if (!video) return
+    const media = getMedia()
+    if (!media) return
 
-    video.muted = !video.muted
-    setMuted(video.muted)
+    media.muted = !media.muted
+    setMuted(media.muted)
   }
 
   const cycleSpeed = () => {
-    const video = videoRef.current
-    if (!video) return
+    const media = getMedia()
+    if (!media) return
 
     const index = SPEEDS.indexOf(speed)
     const next = SPEEDS[(index + 1) % SPEEDS.length]
-    video.playbackRate = next
+    media.playbackRate = next
     setSpeed(next)
   }
 
   const seek = (event: React.MouseEvent<HTMLDivElement>) => {
-    const video = videoRef.current
-    if (!video || !duration) return
+    const media = getMedia()
+    if (!media || !duration) return
 
     const rect = event.currentTarget.getBoundingClientRect()
     const ratio = clamp((event.clientX - rect.left) / rect.width, 0, 1)
     const nextTime = ratio * duration
-    video.currentTime = nextTime
+    media.currentTime = nextTime
     currentTimeMv.set(nextTime)
     onSecondChange(Math.floor(nextTime))
     renderTime(nextTime, duration)
   }
 
   const changeVolume = (value: number) => {
-    const video = videoRef.current
-    if (!video) return
+    const media = getMedia()
+    if (!media) return
 
-    video.volume = value
-    video.muted = value === 0
+    media.volume = value
+    media.muted = value === 0
     setVolume(value)
-    setMuted(video.muted)
+    setMuted(media.muted)
   }
+
+  const stageClass = isAudioOnly
+    ? 'min-h-[280px] lg:min-h-[360px]'
+    : portraitMode
+      ? 'aspect-[9/16] min-h-[420px] max-h-[78vh]'
+      : 'min-h-[280px] lg:min-h-[440px]'
 
   return (
     <div>
-      <div className="relative grid min-h-[280px] place-items-center overflow-hidden rounded-2xl bg-black lg:min-h-[440px]">
-        {src ? <video ref={videoRef} src={src} className="max-h-[72vh] w-full object-contain" playsInline /> : <p className="text-slate-500">No playback URL available</p>}
+      <div className={`relative grid place-items-center overflow-hidden rounded-2xl bg-black ${stageClass}`}>
+        {src ? (
+          isAudioOnly ? (
+            <>
+              <audio ref={audioRef} src={src} preload="metadata" />
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(124,109,250,0.45),transparent_55%)]" />
+              <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,7,20,0.2),rgba(7,7,20,0.85))]" />
+              <div className="relative z-10 w-full px-6 pb-8 pt-10">
+                <p className="mono text-center text-xs uppercase tracking-[0.18em] text-violet-200">Audio Neural Mode</p>
+                <div className="mt-6 flex h-40 items-end gap-1">
+                  {WAVEFORM_BARS.map((bar) => (
+                    <motion.span
+                      key={bar}
+                      className="w-full rounded bg-gradient-to-t from-violet-500/30 via-cyan-300/60 to-amber-300/70"
+                      animate={{ scaleY: [0.3, 1, 0.45, 0.9, 0.35] }}
+                      transition={{
+                        duration: 1.8,
+                        repeat: Number.POSITIVE_INFINITY,
+                        repeatType: 'reverse',
+                        ease: 'easeInOut',
+                        delay: bar * 0.02
+                      }}
+                      style={{ transformOrigin: 'bottom' }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <video ref={videoRef} src={src} className="max-h-[72vh] w-full object-contain" playsInline />
+          )
+        ) : (
+          <p className="text-slate-500">No playback URL available</p>
+        )}
 
         {!playing ? (
-          <button className="focus-ring absolute grid size-[72px] place-items-center rounded-full bg-[var(--primary)]/85 text-white shadow-[0_0_30px_rgba(124,109,250,0.35)]" onClick={togglePlay}>
+          <button className="focus-ring absolute z-20 grid size-[72px] place-items-center rounded-full bg-[var(--primary)]/85 text-white shadow-[0_0_30px_rgba(124,109,250,0.35)]" onClick={togglePlay}>
             <Play fill="currentColor" />
           </button>
         ) : null}
@@ -197,24 +243,19 @@ export function VideoPlayer({ src, currentTimeMv, onSecondChange, onDurationChan
           {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
         </button>
 
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={volume}
-          onChange={(event) => changeVolume(Number(event.target.value))}
-          className="w-16"
-        />
+        <input type="range" min={0} max={1} step={0.01} value={volume} onChange={(event) => changeVolume(Number(event.target.value))} className="w-16" />
 
         <button className="focus-ring mono text-xs text-slate-300" onClick={cycleSpeed}>
           {speed}x
         </button>
 
-        <button className="focus-ring text-slate-300" onClick={() => videoRef.current?.requestFullscreen()}>
-          <Maximize size={15} />
-        </button>
+        {!isAudioOnly ? (
+          <button className="focus-ring text-slate-300" onClick={() => videoRef.current?.requestFullscreen()}>
+            <Maximize size={15} />
+          </button>
+        ) : null}
       </div>
     </div>
   )
 }
+

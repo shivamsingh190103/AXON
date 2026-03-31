@@ -1,4 +1,4 @@
-import { AnalysisStatus, Plan, SourceType } from '@prisma/client'
+import { AnalysisStatus, ContentType, Plan, SourceType } from '@prisma/client'
 import type { Express } from 'express'
 import { nanoid } from 'nanoid'
 import { StatusCodes } from 'http-status-codes'
@@ -134,6 +134,7 @@ export const analysisService = {
         title: item.title,
         originalFilename: item.originalFilename,
         sourceType: item.sourceType,
+        contentType: item.contentType,
         status: item.status,
         createdAt: item.createdAt.toISOString(),
         durationSeconds: item.durationSeconds,
@@ -154,6 +155,7 @@ export const analysisService = {
     userId: string
     file: Express.Multer.File
     userPlan: Plan
+    contentType: ContentType
     durationSeconds?: number
   }) {
     await enforcePlanLimit(params.userId, params.userPlan)
@@ -173,6 +175,7 @@ export const analysisService = {
       data: {
         userId: params.userId,
         sourceType: SourceType.FILE,
+        contentType: params.contentType,
         status: AnalysisStatus.QUEUED,
         originalFilename: params.file.originalname,
         fileSizeBytes: BigInt(params.file.size),
@@ -194,6 +197,7 @@ export const analysisService = {
         analysisId: analysis.id,
         userId: params.userId,
         sourceType: SourceType.FILE,
+        contentType: params.contentType,
         s3Key
       },
       {
@@ -226,7 +230,7 @@ export const analysisService = {
     }
   },
 
-  async createYoutubeAnalysis(params: { userId: string; url: string; userPlan: Plan }) {
+  async createYoutubeAnalysis(params: { userId: string; url: string; userPlan: Plan; contentType: ContentType }) {
     await enforcePlanLimit(params.userId, params.userPlan)
     await enforceQueueDepth(params.userId)
 
@@ -254,6 +258,7 @@ export const analysisService = {
       data: {
         userId: params.userId,
         sourceType: SourceType.YOUTUBE_URL,
+        contentType: params.contentType,
         youtubeUrl: params.url,
         youtubeVideoId: videoId,
         status: AnalysisStatus.QUEUED,
@@ -267,6 +272,7 @@ export const analysisService = {
         analysisId: analysis.id,
         userId: params.userId,
         sourceType: SourceType.YOUTUBE_URL,
+        contentType: params.contentType,
         youtubeUrl: params.url
       },
       {
@@ -542,6 +548,7 @@ export const analysisService = {
         analysisId: analysis.id,
         userId,
         sourceType: analysis.sourceType,
+        contentType: analysis.contentType,
         s3Key: analysis.s3Key ?? undefined,
         youtubeUrl: analysis.youtubeUrl ?? undefined
       },

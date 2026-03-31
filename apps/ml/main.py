@@ -41,6 +41,7 @@ class ExtractRequest(BaseModel):
     s3_key: str
     s3_bucket: str
     duration_seconds: Optional[float] = None
+    content_type: Optional[str] = None
 
 
 class InferRequest(BaseModel):
@@ -76,7 +77,7 @@ def health() -> dict:
 @app.post('/extract', dependencies=[Depends(verify_internal_secret)])
 def extract(body: ExtractRequest) -> dict:
     verify_models_ready()
-    output = run_extract(body.analysis_id, body.s3_key, body.s3_bucket, body.duration_seconds)
+    output = run_extract(body.analysis_id, body.s3_key, body.s3_bucket, body.duration_seconds, body.content_type)
     analysis_duration_cache[body.analysis_id] = output.duration_seconds
     return asdict(output)
 

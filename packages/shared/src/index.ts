@@ -3,6 +3,7 @@ export * from './types/analysis.js'
 export * from './types/user.js'
 export * from './types/job.js'
 export * from './types/api.js'
+export * from './types/content.js'
 
 export * from './schemas/authSchema.js'
 export * from './schemas/analysisSchema.js'

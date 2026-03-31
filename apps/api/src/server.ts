@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import { Server } from 'socket.io'
 import { createAdapter } from '@socket.io/redis-adapter'
 import { createApp } from './app.js'
+import { allowedFrontendOrigins, isAllowedOrigin } from './lib/origins.js'
 import { env } from './lib/env.js'
 import { redis, redisSubscriber } from './lib/redis.js'
 import { setIo } from './lib/socket.js'
@@ -20,7 +21,14 @@ const httpServer = createServer(app)
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [env.FRONTEND_URL],
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true)
+        return
+      }
+
+      callback(new Error(`Origin "${origin ?? 'unknown'}" is not allowed by CORS`))
+    },
     credentials: true
   }
 })
@@ -63,7 +71,7 @@ startAnalysisWorker()
 const stopMaintenance = startMaintenanceJobs()
 
 httpServer.listen(env.PORT, () => {
-  logger.info(`API listening on port ${env.PORT}`)
+  logger.info({ origins: allowedFrontendOrigins }, `API listening on port ${env.PORT}`)
 })
 
 const shutdown = async () => {

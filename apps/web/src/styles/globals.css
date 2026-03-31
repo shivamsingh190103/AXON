@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600&family=Syne:wght@700;800&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -22,6 +23,7 @@ body,
 #root {
   width: 100%;
   min-height: 100%;
+  margin: 0;
   background: radial-gradient(circle at 15% 0%, #0d1024 0%, var(--bg) 50%);
   color: var(--text);
   font-family: 'DM Sans', sans-serif;

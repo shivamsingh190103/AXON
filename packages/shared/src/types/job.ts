@@ -1,10 +1,11 @@
-import type { AnalysisStatus, SourceType } from './enums.js'
+import type { AnalysisStatus, ContentType, SourceType } from './enums.js'
 import type { AnalysisResult } from './analysis.js'
 
 export interface AnalysisJob {
   analysisId: string
   userId: string
   sourceType: SourceType
+  contentType: ContentType
   s3Key?: string
   youtubeUrl?: string
 }

@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { motion, useTransform, type MotionValue } from 'framer-motion'
+import { type ContentType, METRICS_BY_CONTENT_TYPE } from '@axon/shared'
 import { clamp } from '@/utils/clamp'
 import { formatTime } from '@/utils/formatTime'
 
@@ -10,6 +11,7 @@ interface TrackProps {
 }
 
 interface Props {
+  contentType: ContentType
   hook: number[]
   boredom: number[]
   emotion: number[]
@@ -54,7 +56,8 @@ function dotColor(type: string) {
   return 'bg-cyan-400'
 }
 
-export function TimelineTracks({ hook, boredom, emotion, duration, currentTimeMv, onSeek, insightDots }: Props) {
+export function TimelineTracks({ contentType, hook, boredom, emotion, duration, currentTimeMv, onSeek, insightDots }: Props) {
+  const metricLabels = METRICS_BY_CONTENT_TYPE[contentType]
   const playheadLeft = useTransform(currentTimeMv, (currentTime) => `${duration > 0 ? clamp((currentTime / duration) * 100, 0, 100) : 0}%`)
 
   const seekFromEvent = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -65,9 +68,9 @@ export function TimelineTracks({ hook, boredom, emotion, duration, currentTimeMv
 
   return (
     <div className="relative mt-3 space-y-2" onClick={seekFromEvent} role="presentation">
-      <Track label="HOOK" color="34,211,238" values={hook} />
-      <Track label="BOREDOM" color="248,113,113" values={boredom} />
-      <Track label="EMOTION" color="251,146,60" values={emotion} />
+      <Track label={metricLabels.hook.toUpperCase()} color="34,211,238" values={hook} />
+      <Track label={metricLabels.boredom.toUpperCase()} color="248,113,113" values={boredom} />
+      <Track label={metricLabels.emotion.toUpperCase()} color="251,146,60" values={emotion} />
 
       <div className="ml-[54px] mt-2 flex h-4 items-center rounded bg-transparent">
         <div className="relative h-full w-full">

@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express'
-import { createYoutubeAnalysisSchema, exportQuerySchema, updateAnalysisSchema } from '@axon/shared'
+import { createUploadAnalysisSchema, createYoutubeAnalysisSchema, exportQuerySchema, updateAnalysisSchema } from '@axon/shared'
 import { AnalysisStatus } from '@prisma/client'
 import { StatusCodes } from 'http-status-codes'
 import { analysisService } from '../services/analysisService.js'
@@ -41,13 +41,14 @@ export const analysisController = {
       throw new ApiError(StatusCodes.BAD_REQUEST, 'FILE_REQUIRED', 'Please upload a file.')
     }
 
-    const durationSeconds = req.body.durationSeconds ? Number(req.body.durationSeconds) : undefined
+    const body = createUploadAnalysisSchema.parse(req.body ?? {})
 
     const data = await analysisService.createUploadAnalysis({
       userId: req.userId!,
       file,
       userPlan: req.user!.plan,
-      durationSeconds
+      contentType: body.contentType,
+      durationSeconds: body.durationSeconds
     })
 
     ok(res, data, 202)
@@ -59,7 +60,8 @@ export const analysisController = {
     const data = await analysisService.createYoutubeAnalysis({
       userId: req.userId!,
       url: body.url,
-      userPlan: req.user!.plan
+      userPlan: req.user!.plan,
+      contentType: body.contentType
     })
 
     ok(res, data, 202)
