@@ -22,6 +22,18 @@ const IN_FLIGHT_STATUSES: AnalysisStatus[] = [
 
 const DELETE_BLOCKED_STATUSES: AnalysisStatus[] = [AnalysisStatus.EXTRACTING_FEATURES, AnalysisStatus.RUNNING_TRIBE]
 const RETRYABLE_STATUSES: AnalysisStatus[] = [AnalysisStatus.FAILED, AnalysisStatus.CANCELLED]
+const AUDIO_ONLY_CONTENT_TYPES = new Set<ContentType>([
+  ContentType.PODCAST_EPISODE,
+  ContentType.PODCAST_CLIP,
+  ContentType.AUDIO_AD
+])
+
+function mediaFamilyFromMime(mimeType: string): 'audio' | 'video' | 'unknown' {
+  const lower = mimeType.toLowerCase()
+  if (lower.startsWith('audio/')) return 'audio'
+  if (lower.startsWith('video/')) return 'video'
+  return 'unknown'
+}
 
 function extractYoutubeVideoId(url: string) {
   const patterns = [
@@ -161,6 +173,22 @@ export const analysisService = {
     await enforcePlanLimit(params.userId, params.userPlan)
     await enforceQueueDepth(params.userId)
 
+    const expectedFamily = AUDIO_ONLY_CONTENT_TYPES.has(params.contentType) ? 'audio' : 'video'
+    const actualFamily = mediaFamilyFromMime(params.file.mimetype)
+    if (actualFamily === 'unknown') {
+      throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported media type for analysis.')
+    }
+
+    if (actualFamily !== expectedFamily) {
+      throw new ApiError(
+        StatusCodes.UNPROCESSABLE_ENTITY,
+        'CONTENT_TYPE_MEDIA_MISMATCH',
+        expectedFamily === 'audio'
+          ? 'Selected content type expects audio input.'
+          : 'Selected content type expects video input.'
+      )
+    }
+
     const planLimit = planLimits[params.userPlan]
 
     if (params.file.size > planLimit.maxFileSizeBytes) {
@@ -233,6 +261,10 @@ export const analysisService = {
   async createYoutubeAnalysis(params: { userId: string; url: string; userPlan: Plan; contentType: ContentType }) {
     await enforcePlanLimit(params.userId, params.userPlan)
     await enforceQueueDepth(params.userId)
+
+    if (AUDIO_ONLY_CONTENT_TYPES.has(params.contentType)) {
+      throw new ApiError(StatusCodes.UNPROCESSABLE_ENTITY, 'YOUTUBE_AUDIO_UNSUPPORTED', 'Audio-only content types are not supported for YouTube import.')
+    }
 
     const videoId = extractYoutubeVideoId(params.url)
 
