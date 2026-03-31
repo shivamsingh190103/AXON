@@ -38,6 +38,7 @@ export interface AnalysisSummary {
   durationSeconds?: number | null
   thumbnailS3Key?: string | null
   overallScore?: number | null
+  dropPointsFound?: number
   errorCode?: string | null
   errorMessage?: string | null
 }

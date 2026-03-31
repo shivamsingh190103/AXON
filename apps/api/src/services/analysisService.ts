@@ -97,6 +97,22 @@ function cacheKey(userId: string, analysisId: string) {
   return `analysis:${userId}:${analysisId}`
 }
 
+function countDropPointsFromInsights(insights: unknown): number {
+  if (!Array.isArray(insights)) {
+    return 0
+  }
+
+  let count = 0
+  for (const item of insights) {
+    const type = (item as { type?: string }).type
+    if (type === 'BOREDOM_SPIKE' || type === 'CRITICAL_DROP') {
+      count += 1
+    }
+  }
+
+  return count
+}
+
 export const analysisService = {
   async listAnalyses(params: {
     userId: string
@@ -133,7 +149,8 @@ export const analysisService = {
               boredomScore: true,
               emotionScore: true,
               grade: true,
-              gradeSummary: true
+              gradeSummary: true,
+              insights: true
             }
           }
         }
@@ -152,6 +169,7 @@ export const analysisService = {
         durationSeconds: item.durationSeconds,
         thumbnailS3Key: item.thumbnailS3Key,
         overallScore: item.result?.overallScore ?? null,
+        dropPointsFound: countDropPointsFromInsights(item.result?.insights),
         errorCode: item.errorCode,
         errorMessage: item.errorMessage
       })),

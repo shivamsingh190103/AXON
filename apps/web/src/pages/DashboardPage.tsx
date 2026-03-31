@@ -31,11 +31,15 @@ export function DashboardPage() {
     const avgScore = completed.length
       ? Math.round(completed.reduce((sum: number, item: { overallScore?: number }) => sum + (item.overallScore ?? 0), 0) / completed.length)
       : 0
+    const dropPoints = completed.reduce(
+      (sum: number, item: { dropPointsFound?: number }) => sum + (item.dropPointsFound ?? 0),
+      0
+    )
 
     return {
       total: analyses.length,
       avgScore,
-      dropPoints: completed.length * 2 + 1
+      dropPoints
     }
   }, [analyses])
 
