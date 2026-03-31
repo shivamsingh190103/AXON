@@ -19,7 +19,16 @@ from utils.ffmpeg_helpers import ensure_tmp_dir
 VJEPA_BATCH_FRAMES = 64
 VIDEO_EMBED_FPS = 16
 WHISPER_TASK = 'translate'
-AUDIO_ONLY_TYPES = {'PODCAST_EPISODE', 'PODCAST_CLIP', 'AUDIO_AD'}
+AUDIO_ONLY_TYPES = {
+    'PODCAST_EPISODE',
+    'PODCAST_CLIP',
+    'AUDIO_AD',
+    # Compatibility aliases for future taxonomy extensions.
+    'MUSIC_TRACK',
+    'VOICE_MEMO',
+    'AUDIOBOOK',
+    'GENERIC_AUDIO',
+}
 
 
 @dataclass
@@ -28,6 +37,7 @@ class ExtractOutput:
     duration_seconds: float
     detected_language: str
     transcript: list[dict]
+    is_audio_only: bool
 
 
 def _s3_client():
@@ -364,4 +374,5 @@ def run_extract(
         duration_seconds=float(min_seconds),
         detected_language=detected_language,
         transcript=transcript,
+        is_audio_only=is_audio_only,
     )

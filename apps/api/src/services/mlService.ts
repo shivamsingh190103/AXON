@@ -14,6 +14,7 @@ export interface ExtractResponse {
   duration_seconds: number
   detected_language: string
   transcript: Array<{ word: string; start: number; end: number }>
+  is_audio_only?: boolean
 }
 
 export interface InferResponse {
